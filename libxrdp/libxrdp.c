@@ -1376,6 +1376,10 @@ libxrdp_send_to_channel(struct xrdp_session *session, int channel_id,
         free_stream(s);
         return 1;
     }
+    else
+    {
+        LOG(LOG_LEVEL_TRACE, "libxrdp_send_to_channel: xrdp_channel_init successful!");
+    }
 
     /* here we make a copy of the data */
     out_uint8a(s, data, data_len);
@@ -1764,5 +1768,18 @@ libxrdp_send_session_info(struct xrdp_session *session, const char *data,
 
     rdp = (struct xrdp_rdp *) (session->rdp);
     return xrdp_rdp_send_session_info(rdp, data, data_bytes);
+}
+
+/*****************************************************************************/
+int EXPORT_CC
+libxrdp_planar_compress(char *in_data, int width, int height,
+                        struct stream *s, int bpp, int byte_limit,
+                        int start_line, struct stream *temp_s,
+                        int e, int flags)
+{
+    return xrdp_bitmap32_compress(in_data, width, height,
+                                  s, bpp, byte_limit,
+                                  start_line, temp_s,
+                                  e, flags);
 }
 

@@ -182,8 +182,12 @@ xrdp_region_subtract_rect(struct xrdp_region *self, struct xrdp_rect *rect);
 int
 xrdp_region_intersect_rect(struct xrdp_region *self, struct xrdp_rect *rect);
 int
-xrdp_region_get_rect(struct xrdp_region *self, int index,
-                     struct xrdp_rect *rect);
+xrdp_region_get_rect(struct xrdp_region* self, int index,
+                     struct xrdp_rect* rect);
+int
+xrdp_region_get_bounds(struct xrdp_region *self, struct xrdp_rect *rect);
+int
+xrdp_region_not_empty(struct xrdp_region *self);
 
 /* xrdp_bitmap_common.c */
 struct xrdp_bitmap *
@@ -397,20 +401,6 @@ xrdp_bitmap_compress(char *in_data, int width, int height,
 
 /* xrdp_mm.c */
 
-struct dynamic_monitor_layout
-{
-    int flags;
-    int left;
-    int top;
-    int width;
-    int height;
-    int physical_width;
-    int physical_height;
-    int orientation;
-    int desktop_scale_factor;
-    int device_scale_factor;
-};
-
 int
 xrdp_mm_drdynvc_up(struct xrdp_mm *self);
 int
@@ -436,7 +426,11 @@ xrdp_mm_check_wait_objs(struct xrdp_mm *self);
 int
 xrdp_mm_frame_ack(struct xrdp_mm *self, int frame_id);
 int
-server_begin_update(struct xrdp_mod *mod);
+xrdp_mm_egfx_send_planar_bitmap(struct xrdp_mm *self,
+                                struct xrdp_bitmap *bitmap,
+                                struct xrdp_rect *rect);
+int
+server_begin_update(struct xrdp_mod* mod);
 int
 server_end_update(struct xrdp_mod *mod);
 int
