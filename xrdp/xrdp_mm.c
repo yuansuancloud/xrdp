@@ -36,6 +36,7 @@
 
 #include "xrdp_encoder.h"
 #include "xrdp_sockets.h"
+#include "xrdp_egfx.h"
 
 #define LLOG_LEVEL 1
 #define LLOGLN(_level, _args) \
@@ -156,6 +157,7 @@ xrdp_mm_delete(struct xrdp_mm *self)
     self->sesman_trans_up = 0;
     list_delete(self->login_names);
     list_delete(self->login_values);
+    xrdp_egfx_delete(self->egfx);
     g_free(self);
 }
 
@@ -996,6 +998,12 @@ int
 xrdp_mm_drdynvc_up(struct xrdp_mm* self)
 {
     LLOGLN(0, ("xrdp_mm_drdynvc_up:"));
+    /* 0x100 RNS_UD_CS_SUPPORT_DYNVC_GFX_PROTOCOL */
+    if (self->wm->client_info->mcs_early_capability_flags & 0x100)
+    {
+        g_writeln("xrdp_mm_drdynvc_up: gfx capable client");
+        self->egfx = xrdp_egfx_create(self);
+    }
     return 0;
 }
 

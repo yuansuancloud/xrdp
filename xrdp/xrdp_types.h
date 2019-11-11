@@ -299,6 +299,7 @@ struct xrdp_mm
   struct xrdp_encoder *encoder;
   int cs2xr_cid_map[256];
   int xr2cr_cid_map[256];
+  struct xrdp_egfx *egfx;
 };
 
 struct xrdp_key_info
