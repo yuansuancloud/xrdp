@@ -124,8 +124,8 @@ xrdp_painter_send_dirty(struct xrdp_painter *self)
         }
         LLOGLN(10, ("xrdp_painter_send_dirty: x %d y %d cx %d cy %d",
                rect.left, rect.top, cx, cy));
-        libxrdp_send_bitmap(self->session, cx, cy, bpp,
-                            ldata, rect.left, rect.top, cx, cy);
+        //libxrdp_send_bitmap(self->session, cx, cy, bpp,
+        //                    ldata, rect.left, rect.top, cx, cy);
         g_free(ldata);
 
         jndex++;

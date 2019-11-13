@@ -21,11 +21,31 @@
 #ifndef _XRDP_EGFX_H
 #define _XRDP_EGFX_H
 
+struct xrdp_egfx_rect
+{
+    short x1;
+    short y1;
+    short x2;
+    short y2;
+};
+
+struct xrdp_egfx_point
+{
+    short x;
+    short y;
+};
+
 struct xrdp_egfx
 {
-    int chanid;
-    int pad0;
+    struct xrdp_session *session;
+    int channel_id;
+    int frame_id;
     struct stream *s;
+    /* RDPGFX_CMDID_FRAMEACKNOWLEDGE */
+    int queueDepth;
+    int intframeId;
+    int totalFramesDecoded;
+    int pad0;
 };
 
 struct xrdp_egfx *
