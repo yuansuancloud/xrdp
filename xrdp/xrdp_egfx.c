@@ -322,7 +322,7 @@ xrdp_egfx_send_frame_end(struct xrdp_egfx *egfx, int frame_id)
 
 /******************************************************************************/
 static int
-xrdp_egfx_send_capsconfirm(struct xrdp_egfx *egfx)
+xrdp_egfx_send_capsconfirm(struct xrdp_egfx *egfx, int version, int flags)
 {
     int error;
     int bytes;
@@ -341,9 +341,9 @@ xrdp_egfx_send_capsconfirm(struct xrdp_egfx *egfx)
     out_uint16_le(s, 0); /* flags = 0 */
     holdp = s->p;
     out_uint8s(s, 4); /* pduLength, set later */
-    out_uint32_le(s, 0x000A0400); /* version = RDPGFX_CAPVERSION_104 */
+    out_uint32_le(s, version); /* version */
     out_uint32_le(s, 4); /* capsDataLength */
-    out_uint8s(s, 4);
+    out_uint32_le(s, flags);
     s_mark_end(s);
     bytes = (int) ((s->end - holdp) + 4);
     s->p = holdp;
@@ -402,37 +402,58 @@ xrdp_egfx_process_capsadvertise(struct xrdp_egfx *egfx, struct stream *s)
         {
             return 1;
         }
-        if (capsDataLength != 4)
+        if ((version == RDPGFX_CAPVERSION_8) ||
+            (version == RDPGFX_CAPVERSION_81) ||
+            (version == RDPGFX_CAPVERSION_10) ||
+            (version == RDPGFX_CAPVERSION_101) ||
+            (version == RDPGFX_CAPVERSION_102) ||
+            (version == RDPGFX_CAPVERSION_103) ||
+            (version == RDPGFX_CAPVERSION_104) ||
+            (version == RDPGFX_CAPVERSION_105) ||
+            (version == RDPGFX_CAPVERSION_106))
         {
-            return 1;
+            if (capsDataLength != 4)
+            {
+                return 1;
+            }
+            in_uint32_le(s, flags);
+            LLOGLN(0, ("xrdp_egfx_process_capsadvertise: version 0x%8.8x "
+                "capsDataLength %d flags 0x%8.8x",
+                version, capsDataLength, flags));
+            if (version == RDPGFX_CAPVERSION_104)
+            {
+                egfx->cap_version = version;
+                egfx->cap_flags = flags;
+                xrdp_egfx_send_capsconfirm(egfx, version, flags);
+                xrdp_egfx_send_create_surface(egfx, 1, 1920, 1080,
+                                              PIXEL_FORMAT_XRGB_8888);
+                xrdp_egfx_send_map_surface(egfx, 1, 0, 0);
+                xrdp_egfx_send_create_surface(egfx, 2, 100, 100,
+                                              PIXEL_FORMAT_XRGB_8888);
+                rect.x1 = 0;
+                rect.y1 = 0;
+                rect.x2 = 100;
+                rect.y2 = 100;
+                xrdp_egfx_send_fill_surface(egfx, 2, 0x0000FF00, 1, &rect);
+                egfx->frame_id++;
+                xrdp_egfx_send_frame_start(egfx, egfx->frame_id, 0);
+                point.x = 200;
+                point.y = 200;
+                xrdp_egfx_send_surface_to_surface(egfx, 2, 1, &rect, 1, &point);
+                xrdp_egfx_send_frame_end(egfx, egfx->frame_id);
+                egfx->frame_id++;
+                xrdp_egfx_send_frame_start(egfx, egfx->frame_id, 0);
+                point.x = 400;
+                point.y = 400;
+                xrdp_egfx_send_surface_to_surface(egfx, 2, 1, &rect, 1, &point);
+                xrdp_egfx_send_frame_end(egfx, egfx->frame_id);
+            }
         }
-        in_uint32_le(s, flags);
-        LLOGLN(0, ("xrdp_egfx_process_capsadvertise: version 0x%8.8x "
-               "capsDataLength %d flags 0x%8.8x",
-               version, capsDataLength, flags));
-        if ((version == 0x000A0400) && (flags == 0))
+        else
         {
-            xrdp_egfx_send_capsconfirm(egfx);
-            xrdp_egfx_send_create_surface(egfx, 1, 1920, 1080, 0x20);
-            xrdp_egfx_send_map_surface(egfx, 1, 0, 0);
-            xrdp_egfx_send_create_surface(egfx, 2, 100, 100, 0x20);
-            rect.x1 = 0;
-            rect.y1 = 0;
-            rect.x2 = 100;
-            rect.y2 = 100;
-            xrdp_egfx_send_fill_surface(egfx, 2, 0x0000FF00, 1, &rect);
-            egfx->frame_id++;
-            xrdp_egfx_send_frame_start(egfx, egfx->frame_id, 0);
-            point.x = 200;
-            point.y = 200;
-            xrdp_egfx_send_surface_to_surface(egfx, 2, 1, &rect, 1, &point);
-            xrdp_egfx_send_frame_end(egfx, egfx->frame_id);
-            egfx->frame_id++;
-            xrdp_egfx_send_frame_start(egfx, egfx->frame_id, 0);
-            point.x = 400;
-            point.y = 400;
-            xrdp_egfx_send_surface_to_surface(egfx, 2, 1, &rect, 1, &point);
-            xrdp_egfx_send_frame_end(egfx, egfx->frame_id);
+            LLOGLN(0, ("xrdp_egfx_process_capsadvertise: unknown "
+                   "version 0x%8.8x capsDataLength %d",
+                   version, capsDataLength));
         }
     }
     return 0;
@@ -459,7 +480,7 @@ xrdp_egfx_process(struct xrdp_egfx *egfx, struct stream *s)
         holdp = s->p;
         holdend = s->end;
         s->end = s->p + pduLength;
-        LLOGLN(0, ("xrdp_egfx_process: cmdId %d flags %d pduLength %d",
+        LLOGLN(0, ("xrdp_egfx_process: cmdId 0x%x flags %d pduLength %d",
                cmdId, flags, pduLength));
         if (pduLength < 8)
         {
@@ -471,14 +492,14 @@ xrdp_egfx_process(struct xrdp_egfx *egfx, struct stream *s)
         }
         switch (cmdId)
         {
-            case 0x0D: /* RDPGFX_CMDID_FRAMEACKNOWLEDGE */
+            case RDPGFX_CMDID_FRAMEACKNOWLEDGE:
                 error = xrdp_egfx_process_frame_ack(egfx, s);
                 break;
-            case 0x12: /* RDPGFX_CMDID_CAPSADVERTISE */
+            case RDPGFX_CMDID_CAPSADVERTISE:
                 error = xrdp_egfx_process_capsadvertise(egfx, s);
                 break;
             default:
-                LLOGLN(0, ("xrdp_egfx_process: unknown cmdId %d", cmdId));
+                LLOGLN(0, ("xrdp_egfx_process: unknown cmdId 0x%x", cmdId));
                 break;
         }
         if (error != 0)
@@ -515,7 +536,7 @@ xrdp_egfx_data_first(intptr_t id, int chan_id, char *data, int bytes,
     struct xrdp_process *process;
     struct xrdp_egfx *egfx;
 
-    LLOGLN(0, ("xrdp_egfx_data_first:"));
+    LLOGLN(0, ("xrdp_egfx_data_first: bytes %d total_bytes %d", bytes, total_bytes));
     process = (struct xrdp_process *) id;
     egfx = process->wm->mm->egfx;
     if (egfx->s != NULL)
@@ -551,18 +572,20 @@ xrdp_egfx_data(intptr_t id, int chan_id, char *data, int bytes)
     }
     if (!s_check_rem_out(egfx->s, bytes))
     {
+        LLOGLN(0, ("xrdp_egfx_data: error"));
         return 1;
     }
     out_uint8a(egfx->s, data, bytes);
     if (!s_check_rem_out(egfx->s, 1))
     {
         s_mark_end(egfx->s);
+        egfx->s->p = egfx->s->data;
         error = xrdp_egfx_process(egfx, egfx->s);
         free_stream(egfx->s);
         egfx->s = NULL;
         return error;
     }
-    return 1;
+    return 0;
 }
 
 /******************************************************************************/
