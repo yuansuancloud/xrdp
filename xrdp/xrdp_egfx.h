@@ -58,6 +58,35 @@
 #define XR_RDPGFX_CMDID_MAPSURFACETOSCALEDOUTPUT    0x0017
 #define XR_RDPGFX_CMDID_MAPSURFACETOSCALEDWINDOW    0x0018
 
+/* The bitmap data encapsulated in the bitmapData field is uncompressed.
+   Pixels in the uncompressed data are ordered from left to right and then
+   top to bottom. */
+#define XR_RDPGFX_CODECID_UNCOMPRESSED      0x0000
+/* The bitmap data encapsulated in the bitmapData field is compressed using
+   the RemoteFX Codec ([MS-RDPRFX] sections 2.2.1 and 3.1.8). Note that the
+   TS_RFX_RECT ([MS-RDPRFX] section 2.2.2.1.6) structures encapsulated in
+   the bitmapData field MUST all be relative to the top-left corner of the
+   rectangle defined by the destRect field. */
+#define XR_RDPGFX_CODECID_CAVIDEO           0x0003
+/* The bitmap data encapsulated in the bitmapData field is compressed using
+   the ClearCodec Codec (sections 2.2.4.1 and 3.3.8.1). */
+#define XR_RDPGFX_CODECID_CLEARCODEC        0x0008
+/* The bitmap data encapsulated in the bitmapData field is compressed using
+   the Planar Codec ([MS-RDPEGDI] sections 2.2.2.5.1 and 3.1.9). */
+#define XR_RDPGFX_CODECID_PLANAR            0x000A
+/* The bitmap data encapsulated in the bitmapData field is compressed using
+   the MPEG-4 AVC/H.264 Codec in YUV420p mode (section 2.2.4.4). */
+#define XR_RDPGFX_CODECID_AVC420            0x000B
+/* The bitmap data encapsulated in the bitmapData field is compressed using
+   the Alpha Codec (section 2.2.4.3). */
+#define XR_RDPGFX_CODECID_ALPHA             0x000C
+/* The bitmap data encapsulated in the bitmapData field is compressed using
+   the MPEG-4 AVC/H.264 Codec in YUV444 mode (section 2.2.4.5). */
+#define XR_RDPGFX_CODECID_AVC444            0x000E
+/* The bitmap data encapsulated in the bitmapData field is compressed using
+   the MPEG-4 AVC/H.264 Codec in YUV444v2 mode (section 2.2.4.6). */
+#define XR_RDPGFX_CODECID_AVC444V2          0x000F
+
 struct xrdp_egfx_rect
 {
     short x1;
@@ -78,19 +107,43 @@ struct xrdp_egfx
     int channel_id;
     int frame_id;
     struct stream *s;
-    /* RDPGFX_CMDID_FRAMEACKNOWLEDGE */
-    int queueDepth;
-    int intframeId;
-    int totalFramesDecoded;
-    int pad0;
-    /*  RDPGFX_CMDID_CAPSADVERTISE */
-    int cap_version;
-    int cap_flags;
+    void* user;
+    int (*caps_advertise)(void* user, int version, int flags);
+    int (*frame_ack)(void* user, int queue_depth, int frame_id, int frames_decoded);
 };
 
-struct xrdp_egfx *
-xrdp_egfx_create(struct xrdp_mm *mm);
+int
+xrdp_egfx_create(struct xrdp_mm *mm, struct xrdp_egfx **egfx);
 int
 xrdp_egfx_delete(struct xrdp_egfx *egfx);
+int
+xrdp_egfx_send_create_surface(struct xrdp_egfx *egfx, int surface_id,
+                              int width, int height, int pixel_format);
+int
+xrdp_egfx_send_delete_surface(struct xrdp_egfx *egfx, int surface_id);
+int
+xrdp_egfx_send_map_surface(struct xrdp_egfx *egfx, int surface_id,
+                           int x, int y);
+int
+xrdp_egfx_send_fill_surface(struct xrdp_egfx *egfx, int surface_id,
+                            int fill_color, int num_rects,
+                            const struct xrdp_egfx_rect *rects);
+int
+xrdp_egfx_send_surface_to_surface(struct xrdp_egfx *egfx, int src_surface_id,
+                                  int dst_surface_id,
+                                  const struct xrdp_egfx_rect *src_rect,
+                                  int num_dst_points,
+                                  const struct xrdp_egfx_point *dst_points);
+int
+xrdp_egfx_send_frame_start(struct xrdp_egfx *egfx, int frame_id, int timestamp);
+int
+xrdp_egfx_send_frame_end(struct xrdp_egfx *egfx, int frame_id);
+int
+xrdp_egfx_send_capsconfirm(struct xrdp_egfx *egfx, int version, int flags);
+int
+xrdp_egfx_send_wire_to_surface1(struct xrdp_egfx *egfx, int surface_id,
+                                int codec_id, int pixel_format,
+                                struct xrdp_egfx_rect *dest_rect,
+                                void *bitmap_data, int bitmap_data_length);
 
 #endif

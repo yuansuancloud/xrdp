@@ -1002,7 +1002,10 @@ xrdp_mm_drdynvc_up(struct xrdp_mm* self)
     if (self->wm->client_info->mcs_early_capability_flags & 0x100)
     {
         g_writeln("xrdp_mm_drdynvc_up: gfx capable client");
-        self->egfx = xrdp_egfx_create(self);
+        if (xrdp_egfx_create(self, &(self->egfx)) != 0)
+        {
+            g_writeln("xrdp_mm_drdynvc_up: xrdp_egfx_create failed");
+        }
     }
     return 0;
 }
