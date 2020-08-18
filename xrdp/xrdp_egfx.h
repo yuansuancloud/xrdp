@@ -145,5 +145,10 @@ xrdp_egfx_send_wire_to_surface1(struct xrdp_egfx *egfx, int surface_id,
                                 int codec_id, int pixel_format,
                                 struct xrdp_egfx_rect *dest_rect,
                                 void *bitmap_data, int bitmap_data_length);
+int
+xrdp_egfx_send_wire_to_surface2(struct xrdp_egfx *egfx, int surface_id,
+                                int codec_id, int codec_context_id,
+                                int pixel_format,
+                                void *bitmap_data, int bitmap_data_length);
 
 #endif

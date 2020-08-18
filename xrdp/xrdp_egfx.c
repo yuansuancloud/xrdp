@@ -399,21 +399,31 @@ xrdp_egfx_send_wire_to_surface1(struct xrdp_egfx *egfx, int surface_id,
 {
     int error;
     int bytes;
+    int index;
+    int segment_size;
+    int segment_count;
     struct stream *s;
-    char *holdp;
+    char *hold_segment_count;
+    char *bitmap_data8;
 
     LLOGLN(0, ("xrdp_egfx_send_wire_to_surface1:"));
     make_stream(s);
-    init_stream(s, bitmap_data_length + 8192);
+    bytes = bitmap_data_length + 8192;
+    bytes += 5 * (bitmap_data_length / 0xFFFF);
+    init_stream(s, bytes);
     /* RDP_SEGMENTED_DATA */
-    out_uint8(s, 0xE0); /* descriptor = SINGLE */
+    out_uint8(s, 0xE1); /* descriptor = MULTIPART */
+    hold_segment_count = s->p;
+    out_uint8s(s, 2); /* segmentCount set later */
+    out_uint32_le(s, 25 + bitmap_data_length); /* uncompressedSize */
+    /* RDP_DATA_SEGMENT */
+    out_uint32_le(s, 1 + 25); /* segmentArray size */
     /* RDP8_BULK_ENCODED_DATA */
     out_uint8(s, 0x04); /* header = PACKET_COMPR_TYPE_RDP8 */
     /* RDPGFX_HEADER */
     out_uint16_le(s, XR_RDPGFX_CMDID_WIRETOSURFACE_1); /* cmdId */
     out_uint16_le(s, 0); /* flags = 0 */
-    holdp = s->p;
-    out_uint8s(s, 4); /* pduLength, set later */
+    out_uint32_le(s, 25 + bitmap_data_length); /* pduLength */
     out_uint16_le(s, surface_id);
     out_uint16_le(s, codec_id);
     out_uint8(s, pixel_format);
@@ -422,15 +432,105 @@ xrdp_egfx_send_wire_to_surface1(struct xrdp_egfx *egfx, int surface_id,
     out_uint16_le(s, dest_rect->x2);
     out_uint16_le(s, dest_rect->y2);
     out_uint32_le(s, bitmap_data_length);
-    out_uint8a(s, bitmap_data, bitmap_data_length);
+    segment_count = 1;
+    index = 0;
+    bitmap_data8 = (char *) bitmap_data;
+    while (index < bitmap_data_length)
+    {
+        segment_size = bitmap_data_length - index;
+        if (segment_size > 65535)
+        {
+            segment_size = 65535;
+        }
+        /* RDP_DATA_SEGMENT */
+        out_uint32_le(s, 1 + segment_size); /* segmentArray size */
+        /* RDP8_BULK_ENCODED_DATA */
+        out_uint8(s, 0x04); /* header = PACKET_COMPR_TYPE_RDP8 */
+        out_uint8a(s, bitmap_data8 + index, segment_size);
+        LLOGLN(0, ("  segment index %d segment_size %d",
+               segment_count, segment_size));
+        index += segment_size;
+        segment_count++;
+    }
     s_mark_end(s);
-    bytes = (int) ((s->end - holdp) + 4);
-    s->p = holdp;
-    out_uint32_le(s, bytes);
     bytes = (int) (s->end - s->data);
+    /* segment_count */
+    s->p = hold_segment_count;
+    out_uint16_le(s, segment_count);
     error = xrdp_egfx_send_data(egfx, s->data, bytes);
-    LLOGLN(0, ("xrdp_egfx_send_wire_to_surface1: xrdp_egfx_send_data error %d",
-           error));
+    LLOGLN(0, ("xrdp_egfx_send_wire_to_surface1: xrdp_egfx_send_data error %d "
+           "segment_count %d", error, segment_count));
+    free_stream(s);
+    return error;
+}
+
+/******************************************************************************/
+int
+xrdp_egfx_send_wire_to_surface2(struct xrdp_egfx *egfx, int surface_id,
+                                int codec_id, int codec_context_id,
+                                int pixel_format,
+                                void *bitmap_data, int bitmap_data_length)
+{
+    int error;
+    int bytes;
+    int index;
+    int segment_size;
+    int segment_count;
+    struct stream *s;
+    char *hold_segment_count;
+    char *bitmap_data8;
+
+    LLOGLN(0, ("xrdp_egfx_send_wire_to_surface2:"));
+    make_stream(s);
+    bytes = bitmap_data_length + 8192;
+    bytes += 5 * (bitmap_data_length / 0xFFFF);
+    init_stream(s, bytes);
+    /* RDP_SEGMENTED_DATA */
+    out_uint8(s, 0xE1); /* descriptor = MULTIPART */
+    hold_segment_count = s->p;
+    out_uint8s(s, 2); /* segmentCount set later */
+    out_uint32_le(s, 21 + bitmap_data_length); /* uncompressedSize */
+    /* RDP_DATA_SEGMENT */
+    out_uint32_le(s, 1 + 21); /* segmentArray size */
+    /* RDP8_BULK_ENCODED_DATA */
+    out_uint8(s, 0x04); /* header = PACKET_COMPR_TYPE_RDP8 */
+    /* RDPGFX_HEADER */
+    out_uint16_le(s, XR_RDPGFX_CMDID_WIRETOSURFACE_2); /* cmdId */
+    out_uint16_le(s, 0); /* flags = 0 */
+    out_uint32_le(s, 21 + bitmap_data_length); /* pduLength */
+    out_uint16_le(s, surface_id);
+    out_uint16_le(s, codec_id);
+    out_uint32_le(s, codec_context_id);
+    out_uint8(s, pixel_format);
+    out_uint32_le(s, bitmap_data_length);
+    segment_count = 1;
+    index = 0;
+    bitmap_data8 = (char *) bitmap_data;
+    while (index < bitmap_data_length)
+    {
+        segment_size = bitmap_data_length - index;
+        if (segment_size > 65535)
+        {
+            segment_size = 65535;
+        }
+        /* RDP_DATA_SEGMENT */
+        out_uint32_le(s, 1 + segment_size); /* segmentArray size */
+        /* RDP8_BULK_ENCODED_DATA */
+        out_uint8(s, 0x04); /* header = PACKET_COMPR_TYPE_RDP8 */
+        out_uint8a(s, bitmap_data8 + index, segment_size);
+        LLOGLN(0, ("  segment index %d segment_size %d",
+               segment_count, segment_size));
+        index += segment_size;
+        segment_count++;
+    }
+    s_mark_end(s);
+    bytes = (int) (s->end - s->data);
+    /* segment_count */
+    s->p = hold_segment_count;
+    out_uint16_le(s, segment_count);
+    error = xrdp_egfx_send_data(egfx, s->data, bytes);
+    LLOGLN(0, ("xrdp_egfx_send_wire_to_surface2: xrdp_egfx_send_data error %d "
+           "segment_count %d", error, segment_count));
     free_stream(s);
     return error;
 }
