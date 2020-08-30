@@ -76,6 +76,8 @@ xrdp_painter_add_dirty_rect(struct xrdp_painter *self, int x, int y,
     return 0;
 }
 
+#include "xrdp_egfx.h"
+
 /*****************************************************************************/
 static int
 xrdp_painter_send_dirty(struct xrdp_painter *self)
@@ -126,6 +128,27 @@ xrdp_painter_send_dirty(struct xrdp_painter *self)
                rect.left, rect.top, cx, cy));
         //libxrdp_send_bitmap(self->session, cx, cy, bpp,
         //                    ldata, rect.left, rect.top, cx, cy);
+
+        struct xrdp_mm* mm = self->wm->mm;
+        if (mm->egfx != NULL)
+        {
+            struct xrdp_egfx_rect rect1;
+            rect1.x1 = rect.left;
+            rect1.y1 = rect.top;
+            rect1.x2 = rect1.x1 + cx;
+            rect1.y2 = rect1.y1 + cy;
+
+            //struct xrdp_bitmap *screen = self->wm->screen;
+
+            xrdp_egfx_send_frame_start(mm->egfx, 1, 0);
+            xrdp_egfx_send_wire_to_surface1(mm->egfx, 1, 0,
+                                            XR_PIXEL_FORMAT_XRGB_8888,
+                                            &rect1, ldata,
+                                            cx * 4 * cy);
+            xrdp_egfx_send_frame_end(mm->egfx, 1);
+
+        }
+
         g_free(ldata);
 
         jndex++;

@@ -994,6 +994,55 @@ xrdp_mm_process_rail_drawing_orders(struct xrdp_mm* self, struct stream *s)
 }
 
 /******************************************************************************/
+static int
+xrdp_mm_egfx_caps_advertise(void* user, int version, int flags)
+{
+    struct xrdp_mm* self;
+    struct xrdp_egfx_rect rect;
+    struct xrdp_bitmap *screen;
+
+    LLOGLN(0, ("xrdp_mm_egfx_caps_advertise: version 0x%8.8x flags 0x%8.8x",
+           version, flags));
+    self = (struct xrdp_mm *) user;
+    screen = self->wm->screen;
+    //if (version == 0x000a0002)
+    if (version == 0x00080004)
+    {
+        xrdp_egfx_send_capsconfirm(self->egfx, version, flags);
+        if (screen->data != NULL)
+        {
+            xrdp_egfx_send_create_surface(self->egfx, 1,
+                                          screen->width, screen->height,
+                                          XR_PIXEL_FORMAT_XRGB_8888);
+            xrdp_egfx_send_map_surface(self->egfx, 1, 0, 0);
+#if 1
+            xrdp_egfx_send_frame_start(self->egfx, 1, 0);
+            rect.x1 = 0;
+            rect.y1 = 0;
+            rect.x2 = screen->width;
+            rect.y2 = screen->height;
+            xrdp_egfx_send_wire_to_surface1(self->egfx, 1, 0,
+                                            XR_PIXEL_FORMAT_XRGB_8888,
+                                            &rect, screen->data,
+                                            screen->width * 4 * screen->height);
+            xrdp_egfx_send_frame_end(self->egfx, 1);
+#endif
+        }
+    }
+
+    return 0;
+}
+
+/******************************************************************************/
+static int
+xrdp_mm_egfx_frame_ack(void* user, int queue_depth, int frame_id,
+                       int frames_decoded)
+{
+    LLOGLN(0, ("xrdp_mm_egfx_frame_ack:"));
+    return 0;
+}
+
+/******************************************************************************/
 int
 xrdp_mm_drdynvc_up(struct xrdp_mm* self)
 {
@@ -1002,7 +1051,13 @@ xrdp_mm_drdynvc_up(struct xrdp_mm* self)
     if (self->wm->client_info->mcs_early_capability_flags & 0x100)
     {
         g_writeln("xrdp_mm_drdynvc_up: gfx capable client");
-        if (xrdp_egfx_create(self, &(self->egfx)) != 0)
+        if (xrdp_egfx_create(self, &(self->egfx)) == 0)
+        {
+            self->egfx->user = self;
+            self->egfx->caps_advertise = xrdp_mm_egfx_caps_advertise;
+            self->egfx->frame_ack = xrdp_mm_egfx_frame_ack;
+        }
+        else
         {
             g_writeln("xrdp_mm_drdynvc_up: xrdp_egfx_create failed");
         }

@@ -34,8 +34,10 @@ struct xrdp_enc_data
 {
     struct xrdp_mod *mod;
     int num_drects;
+    int pad0;
     short *drects;     /* 4 * num_drects */
     int num_crects;
+    int pad1;
     short *crects;     /* 4 * num_crects */
     char *data;
     int width;
@@ -58,6 +60,7 @@ struct xrdp_enc_data_done
     int y;
     int cx;
     int cy;
+    int pad0;
 };
 
 typedef struct xrdp_enc_data_done XRDP_ENC_DATA_DONE;

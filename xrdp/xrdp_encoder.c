@@ -31,6 +31,10 @@
 #include "rfxcodec_encode.h"
 #endif
 
+#ifdef XRDP_X264
+#include "xrdp_encoder_x264.h"
+#endif
+
 #define LLOG_LEVEL 1
 #define LLOGLN(_level, _args) \
   do \
@@ -103,7 +107,7 @@ xrdp_encoder_create(struct xrdp_mm *mm)
                                                     RFX_FORMAT_YUV, 0);
     }
 #endif
-    else if (client_info->h264_codec_id != 0)
+    else if (client_info->h264_codec_id != 0 || 1) /* always on TODO */
     {
         LLOGLN(0, ("xrdp_encoder_create: starting h264 codec session"));
         self->codec_id = client_info->h264_codec_id;
@@ -113,6 +117,9 @@ xrdp_encoder_create(struct xrdp_mm *mm)
             /* XRDP_nv12 */
             (12 << 24) | (64 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
+#ifdef XRDP_X264
+        self->codec_handle = xrdp_encoder_x264_create();
+#endif
     }
     else
     {
@@ -428,6 +435,173 @@ process_enc_rfx(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
 }
 #endif
 
+#define SAVE_VIDEO 0
+
+#if SAVE_VIDEO
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+static int n_save_data(const char* data, int data_size, int width, int height)
+{
+    int fd;
+    struct _header
+        {
+        char tag[4];
+        int width;
+        int height;
+        int bytes_follow;
+    } header;
+
+    fd = open("video.bin", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    lseek(fd, 0, SEEK_END);
+    header.tag[0] = 'B';
+    header.tag[1] = 'E';
+    header.tag[2] = 'E';
+    header.tag[3] = 'F';
+    header.width = width;
+    header.height = height;
+    header.bytes_follow = data_size;
+    if (write(fd, &header, 16) != 16)
+    {
+        g_printf("save_data: write failed\n");
+    }
+
+    if (write(fd, data, data_size) != data_size)
+    {
+        g_printf("save_data: write failed\n");
+    }
+    close(fd);
+    return 0;
+}
+#endif
+
+#if defined(XRDP_X264)
+
+/*****************************************************************************/
+/* called from encoder thread */
+static int
+process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
+{
+    int index;
+    int x;
+    int y;
+    int cx;
+    int cy;
+    int out_data_bytes;
+    int rcount;
+    short *rrects;
+    int error;
+    char *out_data;
+    XRDP_ENC_DATA_DONE *enc_done;
+    FIFO *fifo_processed;
+    tbus mutex;
+    tbus event_processed;
+    struct stream ls;
+    struct stream *s;
+
+    LLOGLN(10, ("process_enc_x264:"));
+    LLOGLN(10, ("process_enc_x264: num_crects %d num_drects %d",
+           enc->num_crects, enc->num_drects));
+
+    fifo_processed = self->fifo_processed;
+    mutex = self->mutex;
+    event_processed = self->xrdp_encoder_event_processed;
+
+    rcount = enc->num_drects;
+    rrects = enc->drects;
+    if (rcount > 15)
+    {
+        rcount = enc->num_crects;
+        rrects = enc->crects;
+    }
+
+    out_data_bytes = 16 * 1024 * 1024;
+    index = 256 + 16 + 2 + enc->num_drects * 8;
+    out_data = (char *) g_malloc(out_data_bytes + index, 1);
+    if (out_data == 0)
+    {
+        return 0;
+    }
+
+    s = &ls;
+    g_memset(s, 0, sizeof(struct stream));
+    ls.data = out_data + 256;
+    ls.p = ls.data;
+    out_uint32_le(s, 0); /* flags */
+    out_uint32_le(s, 0); /* session id */
+    out_uint16_le(s, enc->width); /* src_width */
+    out_uint16_le(s, enc->height); /* src_height */
+    out_uint16_le(s, enc->width); /* dst_width */
+    out_uint16_le(s, enc->height); /* dst_height */
+
+    out_uint16_le(s, rcount);
+    for (index = 0; index < rcount; index++)
+    {
+        x = rrects[index * 4 + 0];
+        y = rrects[index * 4 + 1];
+        cx = rrects[index * 4 + 2];
+        cy = rrects[index * 4 + 3];
+        out_uint16_le(s, x);
+        out_uint16_le(s, y);
+        out_uint16_le(s, cx);
+        out_uint16_le(s, cy);
+    }
+
+    s_push_layer(s, iso_hdr, 4);
+
+#if defined(XRDP_X264)
+    error = xrdp_encoder_x264_encode(self->codec_handle, 0,
+                                     enc->width, enc->height, 0,
+                                     enc->data,
+                                     s->p, &out_data_bytes);
+#endif
+
+    //g_hexdump(s->p, 128);
+    LLOGLN(10, ("process_enc_h264: xrdp_encoder_x264_encode rv %d "
+           "out_data_bytes %d width %d height %d",
+           error, out_data_bytes, enc->width, enc->height));
+    if (error != 0)
+    {
+        LLOGLN(0, ("process_enc_h264: xrdp_encoder_x264_encode failed rv %d",
+               error));
+        g_free(out_data);
+        return 0;
+    }
+    s->end = s->p + out_data_bytes;
+
+    s_pop_layer(s, iso_hdr);
+    out_uint32_le(s, out_data_bytes);
+
+#if SAVE_VIDEO
+    n_save_data(s->p, out_data_bytes, enc->width, enc->height);
+#endif
+
+    enc_done = (XRDP_ENC_DATA_DONE *)
+               g_malloc(sizeof(XRDP_ENC_DATA_DONE), 1);
+    enc_done->comp_bytes = 4 + 4 + 2 + 2 + 2 + 2 + 2 + rcount * 8 +
+                           4 + out_data_bytes;
+    enc_done->pad_bytes = 256;
+    enc_done->comp_pad_data = out_data;
+    enc_done->enc = enc;
+    enc_done->last = 1;
+    enc_done->cx = self->mm->wm->screen->width;
+    enc_done->cy = self->mm->wm->screen->height;
+
+    /* done with msg */
+    /* inform main thread done */
+    tc_mutex_lock(mutex);
+    fifo_add_item(fifo_processed, enc_done);
+    tc_mutex_unlock(mutex);
+    /* signal completion for main thread */
+    g_set_wait_obj(event_processed);
+
+    return 0;
+}
+
+#else
+
 /*****************************************************************************/
 /* called from encoder thread */
 static int
@@ -436,6 +610,8 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     LLOGLN(0, ("process_enc_x264:"));
     return 0;
 }
+
+#endif
 
 /**
  * Encoder thread main loop
