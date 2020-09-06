@@ -1111,6 +1111,19 @@ process_server_paint_rect_shmem(struct mod *amod, struct stream *s)
             amod->screen_shmem_id_mapped = 1;
         }
     }
+    else if (amod->screen_shmem_id != shmem_id)
+    {
+        amod->screen_shmem_id = shmem_id;
+        g_shmdt(amod->screen_shmem_pixels);
+        amod->screen_shmem_pixels = (char *) g_shmat(amod->screen_shmem_id);
+        if (amod->screen_shmem_pixels == (void*)-1)
+        {
+            /* failed */
+            amod->screen_shmem_id = 0;
+            amod->screen_shmem_pixels = 0;
+            amod->screen_shmem_id_mapped = 0;
+        }
+    }
     if (amod->screen_shmem_pixels != 0)
     {
         bmpdata = amod->screen_shmem_pixels + shmem_offset;
@@ -1247,6 +1260,19 @@ process_server_paint_rect_shmem_ex(struct mod *amod, struct stream *s)
             else
             {
                 amod->screen_shmem_id_mapped = 1;
+            }
+        }
+        else if (amod->screen_shmem_id != shmem_id)
+        {
+            amod->screen_shmem_id = shmem_id;
+            g_shmdt(amod->screen_shmem_pixels);
+            amod->screen_shmem_pixels = (char *) g_shmat(amod->screen_shmem_id);
+            if (amod->screen_shmem_pixels == (void*)-1)
+            {
+                /* failed */
+                amod->screen_shmem_id = 0;
+                amod->screen_shmem_pixels = 0;
+                amod->screen_shmem_id_mapped = 0;
             }
         }
         if (amod->screen_shmem_pixels != 0)
@@ -1520,11 +1546,11 @@ lib_mod_set_param(struct mod *mod, const char *name, const char *value)
 {
     if (g_strcasecmp(name, "username") == 0)
     {
-        g_strncpy(mod->username, value, 255);
+        g_strncpy(mod->username, value, INFO_CLIENT_MAX_CB_LEN-1);
     }
     else if (g_strcasecmp(name, "password") == 0)
     {
-        g_strncpy(mod->password, value, 255);
+        g_strncpy(mod->password, value, INFO_CLIENT_MAX_CB_LEN-1);
     }
     else if (g_strcasecmp(name, "ip") == 0)
     {

@@ -1,3 +1,115 @@
+# Release notes for xrdp v0.9.14 (2020/08/31)
+
+## New features
+* VNC multi-monitor support if you are using a suitable Xvnc server #1343
+* VNC sessions now resize by default on reconnection if you are using a suitable Xvnc server #1343
+* Support Slackware for PAM #1558 #1560
+* Support Programmer Dvorak Keyboard #1663
+
+**[HEADS UP]** The VNC changes are significant. They described in more detail on the following wiki page.
+* [Xvnc backend : Multi monitor and resize support](https://github.com/neutrinolabs/xrdp/wiki/Xvnc-backend-:-Multi-monitor-and-resize-support)
+
+## Bug fixes
+* Fix odd shift key behavior (workaround) #397 #1522
+* Fix Xorg path in the document for Arch Linux #1448 #1529
+* Fix Xorg path in the document for CentOS 8 #1646 #1647
+* Fix internal username/password buffer is smaller than RDP protocol specification #1648 #1653
+* Fix possible memory out-of-bounds accesses #1549
+* Fix memory allocation overflow #1557
+* Prevent chansrv input channels being scanned during a server reset #1595
+* Ignore TS_MULTIFRAGMENTUPDATE_CAPABILITYSET from client if fp disabled #1593
+* Minor manpage fixes #1611
+
+## Other changes
+* CI error fixes 
+* Introduce cppcheck
+
+## Known issues
+* FreeRDP 2.0.0-rc4 or later might not able to connect to xrdp due to
+  xrdp's bad-mannered behaviour, add `+glyph-cache` option to FreeRDP to connect #1266
+* Audio redirection by MP3 codec doesn't sound with some client, use AAC instead #965
+
+# Release notes for xrdp v0.9.13.1 (2020/06/30)
+
+This is a security fix release that includes fixes for the following local buffer overflow vulnerability.
+
+* [CVE-2022-4044: Local users can perform a buffer overflow attack against the xrdp-sesman service and then impersonate it](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-4044)
+
+This update is recommended for all xrdp users.
+
+## Special thanks
+
+Thanks to [Ashley Newson](https://github.com/ashleynewson) reporting the vulnerability and reviewing fix.
+
+-----------------------
+
+# Release notes for xrdp v0.9.13 (2020/03/11)
+
+This release is an intermediate bugfix release. The previous version v0.9.12 has some regressions on drive redirection.
+
+## Bug fixes (drive redirection related)
+* Fix chansrv crashes with segmentation fault (regression in #1449) #1487
+* Drive redirection now supports Guacamole client #1505 #1507
+* Prevent a coredump in the event of a corrupted file system #1507
+* Resolve double-free in `chansrv_fuse` #1469
+
+## Bug fixes (other)
+* Fix the issue `xrdp --version | less` will show empty output #1471 #1472
+* Fix some warnings found by cppcheck #1479 #1481 #1484 #1485
+
+## Other changes
+* Add FreeBSD CI test #1466
+* Move Microsoft-defined constants into separate includes #1470
+* Perform cppcheck during CI test #1493
+* Support mousex button 8/9 #1478
+
+## Known issues
+* FreeRDP 2.0.0-rc4 or later might not able to connect to xrdp due to
+  xrdp's bad-mannered behaviour, add `+glyph-cache` option to FreeRDP to connect #1266
+* Audio redirection by MP3 codec doesn't sound with some client, use AAC instead #965
+
+-----------------------
+
+# Release notes for xrdp v0.9.12 (2019/12/28)
+
+## Bug fixes
+* Fix "The log reference is NULL" error when sesman startup #1425
+* Fix behavior when shmem_id changes #1439
+* Make vsock config accept -1 for cid and port #1441
+* Cleanup refresh rect and check stream bounds #1437
+* Significant improvements in drive redirection #1449
+* Fix build on macOS Catalina #1462
+
+## Other changes
+* Proprietary microphone redirection via rdpsnd is now default off
+  RDP compatible microphone redirection is on instead #1427
+* Skip connecting to chansrv when no channels enabled #1393
+* Add openSUSE's pam rules #1442
+* Do not terminate xrdp daemon when caught SIGHUP #1319
+
+## Known issues
+* FreeRDP 2.0.0-rc4 or later might not able to connect to xrdp due to
+  xrdp's bad-mannered behaviour, add `+glyph-cache` option to FreeRDP to connect #1266
+* Audio redirection by MP3 codec doesn't sound with some client, use AAC instead #965
+
+# Release notes for xrdp v0.9.11 (2019/08/19)
+
+## New features
+* Suppress output (do not draw screen when client window is minimized) #1330
+* Audio input (microphone) redirection compatible with [MS-RDPEAI](https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpeai/d04ffa42-5a0f-4f80-abb1-cc26f71c9452) #1369
+* Now xrdp can listen on more than one port #1124 #1366
+
+## Bug fixes
+* Fix the issue audio redirection sometimes sounds with long delay  #1363
+* Check term event for more responsive shutdown #1372
+
+## Known issues
+* FreeRDP 2.0.0-rc4 or later might not able to connect to xrdp due to
+  xrdp's bad-mannered behaviour, add `+glyph-cache` option to FreeRDP to connect #1266
+* Audio redirection by MP3 codec doesn't sound with some client, use AAC instead #965
+
+-----------------------
+
 # Release notes for xrdp v0.9.11 (2019/08/19)
 
 ## New features
@@ -44,7 +156,7 @@ Thank you for matt335672 contributing to lots of improvements in drive redirecti
 
 -----------------------
 
-## Release notes for xrdp v0.9.9 (2018/12/25)
+# Release notes for xrdp v0.9.9 (2018/12/25)
 
 ## Release cycle
 From the next release, release cycle will be changed from quarterly to every

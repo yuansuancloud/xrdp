@@ -1,6 +1,5 @@
 EXTRA_DIST = \
    keymap-names.txt \
-   xrdp.sh \
    xrdp-sesman.service.in \
    xrdp.service.in
 
@@ -51,7 +50,8 @@ dist_startscript_DATA = \
   km-00000813.ini \
   km-00000816.ini \
   km-0000100c.ini \
-  km-00010409.ini
+  km-00010409.ini \
+  km-19360409.ini
 
 #
 # platform specific files
@@ -61,7 +61,6 @@ if LINUX
 SUBDIRS += \
   pam.d \
   pulse
-dist_startscript_SCRIPTS = xrdp.sh
 if HAVE_SYSTEMD
 systemdsystemunit_DATA = \
   xrdp-sesman.service \

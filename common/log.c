@@ -555,9 +555,7 @@ log_message(const enum logLevels lvl, const char *msg, ...)
     now_t = time(&now_t);
     now = localtime(&now_t);
 
-    snprintf(buff, 21, "[%.4d%.2d%.2d-%.2d:%.2d:%.2d] ", now->tm_year + 1900,
-             now->tm_mon + 1, now->tm_mday, now->tm_hour, now->tm_min,
-             now->tm_sec);
+    strftime(buff, 21, "[%Y%m%d-%H:%M:%S] ", now);
 
     internal_log_lvl2str(lvl, buff + 20);
 
@@ -569,6 +567,7 @@ log_message(const enum logLevels lvl, const char *msg, ...)
     if (len > LOG_BUFFER_SIZE)
     {
         log_message(LOG_LEVEL_WARNING, "next message will be truncated");
+        len = LOG_BUFFER_SIZE;
     }
 
     /* forcing the end of message string */

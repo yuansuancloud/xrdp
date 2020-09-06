@@ -1520,6 +1520,14 @@ xrdp_mm_connect_chansrv(struct xrdp_mm *self, const char *ip, const char *port)
 
     self->usechansrv = 1;
 
+    if (self->wm->client_info->channels_allowed == 0)
+    {
+        log_message(LOG_LEVEL_DEBUG, "%s: "
+                    "skip connecting to chansrv because all channels are disabled",
+                    __func__);
+        return 0;
+    }
+
     /* connect channel redir */
     if ((g_strcmp(ip, "127.0.0.1") == 0) || (ip[0] == 0))
     {
@@ -3367,6 +3375,9 @@ server_draw_text(struct xrdp_mod *mod, int font,
 }
 
 /*****************************************************************************/
+
+/* Note : if this is called on a multimon setup, the client is resized
+ * to a single monitor */
 int
 server_reset(struct xrdp_mod *mod, int width, int height, int bpp)
 {
@@ -3385,10 +3396,11 @@ server_reset(struct xrdp_mod *mod, int width, int height, int bpp)
         return 0;
     }
 
-    /* if same, don't need to do anything */
+    /* if same (and only one monitor on client) don't need to do anything */
     if (wm->client_info->width == width &&
-            wm->client_info->height == height &&
-            wm->client_info->bpp == bpp)
+        wm->client_info->height == height &&
+        wm->client_info->bpp == bpp &&
+        (wm->client_info->monitorCount == 0 || wm->client_info->multimon == 0))
     {
         return 0;
     }

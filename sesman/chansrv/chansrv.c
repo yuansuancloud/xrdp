@@ -39,6 +39,10 @@
 #include "xrdp_sockets.h"
 #include "audin.h"
 
+#include "ms-rdpbcgr.h"
+
+#define MAX_PATH 260
+
 static struct trans *g_lis_trans = 0;
 static struct trans *g_con_trans = 0;
 static struct trans *g_api_lis_trans = 0;
@@ -407,7 +411,7 @@ process_message_channel_setup(struct stream *s)
 
     if (g_rdpdr_index >= 0)
     {
-        dev_redir_init();
+        devredir_init();
         xfuse_init();
     }
 
@@ -458,7 +462,7 @@ process_message_channel_data(struct stream *s)
         }
         else if (chan_id == g_rdpdr_chan_id)
         {
-            rv = dev_redir_data_in(s, chan_id, chan_flags, length, total_length);
+            rv = devredir_data_in(s, chan_id, chan_flags, length, total_length);
         }
         else if (chan_id == g_rail_chan_id)
         {
@@ -1042,9 +1046,13 @@ my_api_trans_data_in(struct trans *trans)
     int rv;
     int bytes;
     int ver;
-    int channel_name_bytes;
     struct chansrv_drdynvc_procs procs;
-    char *chan_name;
+    /*
+     * Name is limited to CHANNEL_NAME_LEN for an SVC, or MAX_PATH
+     * bytes for a DVC
+     */
+    char chan_name[MAX(CHANNEL_NAME_LEN, MAX_PATH) + 1];
+    unsigned int channel_name_bytes;
 
     //g_writeln("my_api_trans_data_in: extra_flags %d", trans->extra_flags);
     rv = 0;
@@ -1067,12 +1075,13 @@ my_api_trans_data_in(struct trans *trans)
         rv = 1;
         in_uint32_le(s, channel_name_bytes);
         //g_writeln("my_api_trans_data_in: channel_name_bytes %d", channel_name_bytes);
-        chan_name = g_new0(char, channel_name_bytes + 1);
-        if (chan_name == NULL)
+        if (channel_name_bytes > (sizeof(chan_name) - 1))
         {
             return 1;
         }
         in_uint8a(s, chan_name, channel_name_bytes);
+        chan_name[channel_name_bytes] = '\0';
+
         in_uint32_le(s, ad->chan_flags);
         //g_writeln("my_api_trans_data_in: chan_name %s chan_flags 0x%8.8x", chan_name, ad->chan_flags);
         if (ad->chan_flags == 0)
@@ -1132,7 +1141,6 @@ my_api_trans_data_in(struct trans *trans)
             //          "chan_id %d", rv, ad->chan_id);
             g_drdynvcs[ad->chan_id].xrdp_api_trans = trans;
         }
-        g_free(chan_name);
         init_stream(s, 0);
         trans->extra_flags = 2;
         trans->header_size = 0;
@@ -1412,7 +1420,7 @@ channel_thread_loop(void *in_val)
                 LOGM((LOG_LEVEL_INFO, "channel_thread_loop: g_term_event set"));
                 clipboard_deinit();
                 sound_deinit();
-                dev_redir_deinit();
+                devredir_deinit();
                 rail_deinit();
                 break;
             }
@@ -1434,7 +1442,7 @@ channel_thread_loop(void *in_val)
                           "trans_check_wait_objs error resetting"));
                     clipboard_deinit();
                     sound_deinit();
-                    dev_redir_deinit();
+                    devredir_deinit();
                     rail_deinit();
                     /* delete g_con_trans */
                     trans_delete(g_con_trans);
@@ -1460,7 +1468,7 @@ channel_thread_loop(void *in_val)
             api_con_trans_list_check_wait_objs();
             xcommon_check_wait_objs();
             sound_check_wait_objs();
-            dev_redir_check_wait_objs();
+            devredir_check_wait_objs();
             xfuse_check_wait_objs();
             timeout = -1;
             num_objs = 0;
@@ -1479,7 +1487,7 @@ channel_thread_loop(void *in_val)
                                                 &timeout);
             xcommon_get_wait_objs(objs, &num_objs, &timeout);
             sound_get_wait_objs(objs, &num_objs, &timeout);
-            dev_redir_get_wait_objs(objs, &num_objs, &timeout);
+            devredir_get_wait_objs(objs, &num_objs, &timeout);
             xfuse_get_wait_objs(objs, &num_objs, &timeout);
             get_timeout(&timeout);
         } /* end while (g_obj_wait(objs, num_objs, 0, 0, timeout) == 0) */
