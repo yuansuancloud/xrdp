@@ -157,6 +157,8 @@ struct xrdp_client_info
   int use_cache_glyph_v2;
   int rail_enable;
   int suppress_output;
+
+  int gfx;
 };
 
 #endif

@@ -107,7 +107,7 @@ xrdp_encoder_create(struct xrdp_mm *mm)
                                                     RFX_FORMAT_YUV, 0);
     }
 #endif
-    else if (client_info->h264_codec_id != 0 || 1) /* always on TODO */
+    else if (client_info->h264_codec_id != 0)
     {
         LLOGLN(0, ("xrdp_encoder_create: starting h264 codec session"));
         self->codec_id = client_info->h264_codec_id;
@@ -117,6 +117,21 @@ xrdp_encoder_create(struct xrdp_mm *mm)
             /* XRDP_nv12 */
             (12 << 24) | (64 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
+#ifdef XRDP_X264
+        self->codec_handle = xrdp_encoder_x264_create();
+#endif
+    }
+    else if (client_info->gfx)
+    {
+        LLOGLN(0, ("xrdp_encoder_create: starting h264 codec session gfx"));
+        self->codec_id = client_info->h264_codec_id;
+        self->in_codec_mode = 1;
+        client_info->capture_code = 3;
+        client_info->capture_format =
+            /* XRDP_nv12_709fr */
+            (12 << 24) | (66 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
+        self->process_enc = process_enc_h264;
+        self->gfx = 1;
 #ifdef XRDP_X264
         self->codec_handle = xrdp_encoder_x264_create();
 #endif
@@ -500,6 +515,8 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     tbus event_processed;
     struct stream ls;
     struct stream *s;
+    int comp_bytes_pre;
+    int enc_done_flags;
 
     LLOGLN(10, ("process_enc_x264:"));
     LLOGLN(10, ("process_enc_x264: num_crects %d num_drects %d",
@@ -529,27 +546,55 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     g_memset(s, 0, sizeof(struct stream));
     ls.data = out_data + 256;
     ls.p = ls.data;
-    out_uint32_le(s, 0); /* flags */
-    out_uint32_le(s, 0); /* session id */
-    out_uint16_le(s, enc->width); /* src_width */
-    out_uint16_le(s, enc->height); /* src_height */
-    out_uint16_le(s, enc->width); /* dst_width */
-    out_uint16_le(s, enc->height); /* dst_height */
 
-    out_uint16_le(s, rcount);
-    for (index = 0; index < rcount; index++)
+    if (self->gfx)
     {
-        x = rrects[index * 4 + 0];
-        y = rrects[index * 4 + 1];
-        cx = rrects[index * 4 + 2];
-        cy = rrects[index * 4 + 3];
-        out_uint16_le(s, x);
-        out_uint16_le(s, y);
-        out_uint16_le(s, cx);
-        out_uint16_le(s, cy);
+        /* RFX_AVC420_METABLOCK */
+        out_uint32_le(s, rcount); /* numRegionRects */
+        for (index = 0; index < rcount; index++)
+        {
+            x = rrects[index * 4 + 0];
+            y = rrects[index * 4 + 1];
+            cx = rrects[index * 4 + 2];
+            cy = rrects[index * 4 + 3];
+            /* RDPGFX_RECT16 */
+            out_uint16_le(s, x);
+            out_uint16_le(s, y);
+            out_uint16_le(s, x + cx);
+            out_uint16_le(s, y + cy);
+        }
+        for (index = 0; index < rcount; index++)
+        {
+            out_uint8(s, 23); /* qp */
+            out_uint8(s, 100); /* quality level 0..100 */
+        }
+        comp_bytes_pre = 4 + rcount * 8 + rcount * 2;
+        enc_done_flags = 1;
     }
-
-    s_push_layer(s, iso_hdr, 4);
+    else
+    {
+        out_uint32_le(s, 0); /* flags */
+        out_uint32_le(s, 0); /* session id */
+        out_uint16_le(s, enc->width); /* src_width */
+        out_uint16_le(s, enc->height); /* src_height */
+        out_uint16_le(s, enc->width); /* dst_width */
+        out_uint16_le(s, enc->height); /* dst_height */
+        out_uint16_le(s, rcount);
+        for (index = 0; index < rcount; index++)
+        {
+            x = rrects[index * 4 + 0];
+            y = rrects[index * 4 + 1];
+            cx = rrects[index * 4 + 2];
+            cy = rrects[index * 4 + 3];
+            out_uint16_le(s, x);
+            out_uint16_le(s, y);
+            out_uint16_le(s, cx);
+            out_uint16_le(s, cy);
+        }
+        s_push_layer(s, iso_hdr, 4);
+        comp_bytes_pre = 4 + 4 + 2 + 2 + 2 + 2 + 2 + rcount * 8 + 4;
+        enc_done_flags = 0;
+    }
 
 #if defined(XRDP_X264)
     error = xrdp_encoder_x264_encode(self->codec_handle, 0,
@@ -558,7 +603,6 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
                                      s->p, &out_data_bytes);
 #endif
 
-    //g_hexdump(s->p, 128);
     LLOGLN(10, ("process_enc_h264: xrdp_encoder_x264_encode rv %d "
            "out_data_bytes %d width %d height %d",
            error, out_data_bytes, enc->width, enc->height));
@@ -571,8 +615,11 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     }
     s->end = s->p + out_data_bytes;
 
-    s_pop_layer(s, iso_hdr);
-    out_uint32_le(s, out_data_bytes);
+    if (s->iso_hdr != NULL)
+    {
+        s_pop_layer(s, iso_hdr);
+        out_uint32_le(s, out_data_bytes);
+    }
 
 #if SAVE_VIDEO
     n_save_data(s->p, out_data_bytes, enc->width, enc->height);
@@ -580,14 +627,14 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
 
     enc_done = (XRDP_ENC_DATA_DONE *)
                g_malloc(sizeof(XRDP_ENC_DATA_DONE), 1);
-    enc_done->comp_bytes = 4 + 4 + 2 + 2 + 2 + 2 + 2 + rcount * 8 +
-                           4 + out_data_bytes;
+    enc_done->comp_bytes = comp_bytes_pre + out_data_bytes;
     enc_done->pad_bytes = 256;
     enc_done->comp_pad_data = out_data;
     enc_done->enc = enc;
     enc_done->last = 1;
     enc_done->cx = self->mm->wm->screen->width;
     enc_done->cy = self->mm->wm->screen->height;
+    enc_done->flags = enc_done_flags;
 
     /* done with msg */
     /* inform main thread done */

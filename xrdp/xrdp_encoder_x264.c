@@ -64,6 +64,7 @@ xrdp_encoder_x264_create(void)
 {
     struct x264_global *xg;
 
+    LLOGLN(0, ("xrdp_encoder_x264_create:"));
     xg = (struct x264_global *) g_malloc(sizeof(struct x264_global), 1);
     if (xg == 0)
     {
@@ -105,6 +106,7 @@ xrdp_encoder_x264_encode(void *handle, int session,
     x264_picture_t pic_in;
     x264_picture_t pic_out;
 
+    LLOGLN(10, ("xrdp_encoder_x264_encode:"));
     xg = (struct x264_global *) handle;
     xe = &(xg->encoders[session]);
     if ((xe->x264_enc_han == 0) || (xe->width != width) || (xe->height != height))
@@ -118,12 +120,17 @@ xrdp_encoder_x264_encode(void *handle, int session,
         }
         if ((width > 0) && (height > 0))
         {
+            //x264_param_default_preset(&(xe->x264_params), "superfast", "zerolatency");
             x264_param_default_preset(&(xe->x264_params), "ultrafast", "zerolatency");
             xe->x264_params.i_threads = 1;
             xe->x264_params.i_width = width;
             xe->x264_params.i_height = height;
             xe->x264_params.i_fps_num = 24;
             xe->x264_params.i_fps_den = 1;
+            //xe->x264_params.b_cabac = 1;
+            //xe->x264_params.i_bframe = 0;
+            //xe->x264_params.rc.i_rc_method = X264_RC_CQP;
+            //xe->x264_params.rc.i_qp_constant = 23;
             //x264_param_apply_profile(&(xe->x264_params), "high");
             x264_param_apply_profile(&(xe->x264_params), "main");
             //x264_param_apply_profile(&(xe->x264_params), "baseline");

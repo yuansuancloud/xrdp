@@ -173,8 +173,6 @@ xrdp_caps_process_order(struct xrdp_rdp *self, struct stream *s,
         self->client_info.no_orders_supported = 1;
     }
 
-    self->client_info.no_orders_supported = 1;
-
     return 0;
 }
 

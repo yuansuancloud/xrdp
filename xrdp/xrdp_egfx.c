@@ -294,7 +294,7 @@ xrdp_egfx_send_frame_start(struct xrdp_egfx *egfx, int frame_id, int timestamp)
     struct stream *s;
     char *holdp;
 
-    LLOGLN(0, ("xrdp_egfx_send_frame_start:"));
+    LLOGLN(10, ("xrdp_egfx_send_frame_start:"));
     make_stream(s);
     init_stream(s, 8192);
     /* RDP_SEGMENTED_DATA */
@@ -314,7 +314,7 @@ xrdp_egfx_send_frame_start(struct xrdp_egfx *egfx, int frame_id, int timestamp)
     out_uint32_le(s, bytes);
     bytes = (int) (s->end - s->data);
     error = xrdp_egfx_send_data(egfx, s->data, bytes);
-    LLOGLN(0, ("xrdp_egfx_send_frame_start: xrdp_egfx_send_data error %d",
+    LLOGLN(10, ("xrdp_egfx_send_frame_start: xrdp_egfx_send_data error %d",
            error));
     free_stream(s);
     return error;
@@ -329,7 +329,7 @@ xrdp_egfx_send_frame_end(struct xrdp_egfx *egfx, int frame_id)
     struct stream *s;
     char *holdp;
 
-    LLOGLN(0, ("xrdp_egfx_send_frame_end:"));
+    LLOGLN(10, ("xrdp_egfx_send_frame_end:"));
     make_stream(s);
     init_stream(s, 8192);
     /* RDP_SEGMENTED_DATA */
@@ -348,7 +348,7 @@ xrdp_egfx_send_frame_end(struct xrdp_egfx *egfx, int frame_id)
     out_uint32_le(s, bytes);
     bytes = (int) (s->end - s->data);
     error = xrdp_egfx_send_data(egfx, s->data, bytes);
-    LLOGLN(0, ("xrdp_egfx_send_frame_end: xrdp_egfx_send_data error %d",
+    LLOGLN(10, ("xrdp_egfx_send_frame_end: xrdp_egfx_send_data error %d",
            error));
     free_stream(s);
     return error;
@@ -406,7 +406,7 @@ xrdp_egfx_send_wire_to_surface1(struct xrdp_egfx *egfx, int surface_id,
     char *hold_segment_count;
     char *bitmap_data8;
 
-    LLOGLN(0, ("xrdp_egfx_send_wire_to_surface1:"));
+    LLOGLN(10, ("xrdp_egfx_send_wire_to_surface1:"));
     make_stream(s);
     bytes = bitmap_data_length + 8192;
     bytes += 5 * (bitmap_data_length / 0xFFFF);
@@ -447,7 +447,7 @@ xrdp_egfx_send_wire_to_surface1(struct xrdp_egfx *egfx, int surface_id,
         /* RDP8_BULK_ENCODED_DATA */
         out_uint8(s, 0x04); /* header = PACKET_COMPR_TYPE_RDP8 */
         out_uint8a(s, bitmap_data8 + index, segment_size);
-        LLOGLN(0, ("  segment index %d segment_size %d",
+        LLOGLN(10, ("  segment index %d segment_size %d",
                segment_count, segment_size));
         index += segment_size;
         segment_count++;
@@ -458,7 +458,7 @@ xrdp_egfx_send_wire_to_surface1(struct xrdp_egfx *egfx, int surface_id,
     s->p = hold_segment_count;
     out_uint16_le(s, segment_count);
     error = xrdp_egfx_send_data(egfx, s->data, bytes);
-    LLOGLN(0, ("xrdp_egfx_send_wire_to_surface1: xrdp_egfx_send_data error %d "
+    LLOGLN(10, ("xrdp_egfx_send_wire_to_surface1: xrdp_egfx_send_data error %d "
            "segment_count %d", error, segment_count));
     free_stream(s);
     return error;
@@ -544,7 +544,7 @@ xrdp_egfx_process_frame_ack(struct xrdp_egfx *egfx, struct stream *s)
     int intframeId;
     int totalFramesDecoded;
 
-    LLOGLN(0, ("xrdp_egfx_process_frame_ack:"));
+    LLOGLN(10, ("xrdp_egfx_process_frame_ack:"));
     if (!s_check_rem(s, 12))
     {
         return 1;
@@ -552,7 +552,7 @@ xrdp_egfx_process_frame_ack(struct xrdp_egfx *egfx, struct stream *s)
     in_uint32_le(s, queueDepth);
     in_uint32_le(s, intframeId);
     in_uint32_le(s, totalFramesDecoded);
-    LLOGLN(0, ("xrdp_egfx_process_frame_ack: queueDepth %d intframeId %d "
+    LLOGLN(10, ("xrdp_egfx_process_frame_ack: queueDepth %d intframeId %d "
            "totalFramesDecoded %d",
            queueDepth, intframeId, totalFramesDecoded));
     if (egfx->frame_ack != NULL)
@@ -613,7 +613,7 @@ xrdp_egfx_process(struct xrdp_egfx *egfx, struct stream *s)
     char *holdp;
     char *holdend;
 
-    LLOGLN(0, ("xrdp_egfx_process:"));
+    LLOGLN(10, ("xrdp_egfx_process:"));
     error = 0;
     while (s_check_rem(s, 8))
     {
@@ -623,7 +623,7 @@ xrdp_egfx_process(struct xrdp_egfx *egfx, struct stream *s)
         holdp = s->p;
         holdend = s->end;
         s->end = s->p + pduLength;
-        LLOGLN(0, ("xrdp_egfx_process: cmdId 0x%x flags %d pduLength %d",
+        LLOGLN(10, ("xrdp_egfx_process: cmdId 0x%x flags %d pduLength %d",
                cmdId, flags, pduLength));
         if (pduLength < 8)
         {
@@ -682,7 +682,7 @@ xrdp_egfx_data_first(intptr_t id, int chan_id, char *data, int bytes,
     struct xrdp_process *process;
     struct xrdp_egfx *egfx;
 
-    LLOGLN(0, ("xrdp_egfx_data_first: bytes %d total_bytes %d", bytes, total_bytes));
+    LLOGLN(10, ("xrdp_egfx_data_first: bytes %d total_bytes %d", bytes, total_bytes));
     process = (struct xrdp_process *) id;
     egfx = process->wm->mm->egfx;
     if (egfx->s != NULL)
@@ -705,7 +705,7 @@ xrdp_egfx_data(intptr_t id, int chan_id, char *data, int bytes)
     struct xrdp_process *process;
     struct xrdp_egfx *egfx;
 
-    LLOGLN(0, ("xrdp_egfx_data:"));
+    LLOGLN(10, ("xrdp_egfx_data:"));
     process = (struct xrdp_process *) id;
     egfx = process->wm->mm->egfx;
     if (egfx->s == NULL)

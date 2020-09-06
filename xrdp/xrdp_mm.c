@@ -1033,12 +1033,36 @@ xrdp_mm_egfx_caps_advertise(void* user, int version, int flags)
     return 0;
 }
 
+static int
+xrdp_mm_update_module_frame_ack(struct xrdp_mm *self);
+
 /******************************************************************************/
 static int
 xrdp_mm_egfx_frame_ack(void* user, int queue_depth, int frame_id,
                        int frames_decoded)
 {
-    LLOGLN(0, ("xrdp_mm_egfx_frame_ack:"));
+    struct xrdp_mm* self;
+    struct xrdp_encoder *encoder;
+
+    LLOGLN(10, ("xrdp_mm_egfx_frame_ack:"));
+    self = (struct xrdp_mm *) user;
+    encoder = self->encoder;
+    LLOGLN(10, ("xrdp_mm_egfx_frame_ack: incoming %d, client %d, server %d",
+           frame_id, encoder->frame_id_client, encoder->frame_id_server));
+    if ((frame_id < 0) || (frame_id > encoder->frame_id_server))
+    {
+        /* if frame_id is negative or bigger then what server last sent
+           just ack all sent frames */
+        /* some clients can send big number just to clear all
+           pending frames */
+        encoder->frame_id_client = encoder->frame_id_server;
+    }
+    else
+    {
+        /* frame acks can come out of order so ignore older one */
+        encoder->frame_id_client = MAX(frame_id, encoder->frame_id_client);
+    }
+    xrdp_mm_update_module_frame_ack(self);
     return 0;
 }
 
@@ -2583,6 +2607,7 @@ xrdp_mm_process_enc_done(struct xrdp_mm *self)
     int y;
     int cx;
     int cy;
+    struct xrdp_egfx_rect rect;
 
     while (1)
     {
@@ -2603,23 +2628,46 @@ xrdp_mm_process_enc_done(struct xrdp_mm *self)
         cy = enc_done->cy;
         if (enc_done->comp_bytes > 0)
         {
-            libxrdp_fastpath_send_frame_marker(self->wm->session, 0,
-                                               enc_done->enc->frame_id);
-            libxrdp_fastpath_send_surface(self->wm->session,
-                                          enc_done->comp_pad_data,
-                                          enc_done->pad_bytes,
-                                          enc_done->comp_bytes,
-                                          x, y, x + cx, y + cy,
-                                          32, self->encoder->codec_id,
-                                          cx, cy);
-            libxrdp_fastpath_send_frame_marker(self->wm->session, 1,
-                                               enc_done->enc->frame_id);
+
+            LLOGLN(10, ("xrdp_mm_process_enc_done: x %d y %d cx %d cy %d frame_id %d use_frame_acks %d",
+                   x, y, cx, cy, enc_done->enc->frame_id, self->wm->client_info->use_frame_acks));
+
+            if (enc_done->flags & 1) /* gfx */
+            {
+                xrdp_egfx_send_frame_start(self->egfx, enc_done->enc->frame_id, 0);
+                rect.x1 = 0;
+                rect.y1 = 0;
+                rect.x2 = cx;
+                rect.y2 = cy;
+                xrdp_egfx_send_wire_to_surface1(self->egfx, 1,
+                                                XR_RDPGFX_CODECID_AVC420,
+                                                XR_PIXEL_FORMAT_XRGB_8888,
+                                                &rect,
+                                                enc_done->comp_pad_data + enc_done->pad_bytes,
+                                                enc_done->comp_bytes);
+                xrdp_egfx_send_frame_end(self->egfx, enc_done->enc->frame_id);
+            }
+            else
+            {
+                libxrdp_fastpath_send_frame_marker(self->wm->session, 0,
+                                                   enc_done->enc->frame_id);
+                libxrdp_fastpath_send_surface(self->wm->session,
+                                              enc_done->comp_pad_data,
+                                              enc_done->pad_bytes,
+                                              enc_done->comp_bytes,
+                                              x, y, x + cx, y + cy,
+                                              32, self->encoder->codec_id,
+                                              cx, cy);
+                libxrdp_fastpath_send_frame_marker(self->wm->session, 1,
+                                                   enc_done->enc->frame_id);
+            }
         }
         /* free enc_done */
         if (enc_done->last)
         {
             LLOGLN(10, ("xrdp_mm_process_enc_done: last set"));
-            if (self->wm->client_info->use_frame_acks == 0)
+            if ((self->wm->client_info->use_frame_acks == 0) &&
+                ((enc_done->flags & 1) == 0))
             {
                 self->mod->mod_frame_ack(self->mod,
                                          enc_done->enc->flags,
