@@ -995,20 +995,65 @@ xrdp_mm_process_rail_drawing_orders(struct xrdp_mm* self, struct stream *s)
 
 /******************************************************************************/
 static int
-xrdp_mm_egfx_caps_advertise(void* user, int version, int flags)
+xrdp_mm_egfx_caps_advertise(void* user, int caps_count,
+                            int *versions, int *flagss)
 {
     struct xrdp_mm* self;
     struct xrdp_egfx_rect rect;
     struct xrdp_bitmap *screen;
+    int index;
+    int best_index;
+    int error;
 
-    LLOGLN(0, ("xrdp_mm_egfx_caps_advertise: version 0x%8.8x flags 0x%8.8x",
-           version, flags));
+    LLOGLN(0, ("xrdp_mm_egfx_caps_advertise:"));
     self = (struct xrdp_mm *) user;
     screen = self->wm->screen;
-    //if (version == 0x000a0002)
-    if (version == 0x00080004)
+    best_index = -1;
+    for (index = 0; index < caps_count; index++)
     {
-        xrdp_egfx_send_capsconfirm(self->egfx, version, flags);
+        LLOGLN(0, ("  version 0x%8.8x flags 0x%8.8x", versions[index],
+               flagss[index]));
+        switch (versions[index])
+        {
+            case XR_RDPGFX_CAPVERSION_8: /* 0x00080004 */
+                break;
+            case XR_RDPGFX_CAPVERSION_81: /* 0x00080105 */
+                /* RDPGFX_CAPS_FLAG_AVC420_ENABLED */
+                if (flagss[index] & 0x10)
+                {
+                    best_index = index;
+                }
+                break;
+            case XR_RDPGFX_CAPVERSION_10: /* 0x000A0002 */
+                break;
+            case XR_RDPGFX_CAPVERSION_101: /* 0x000A0100 */
+                break;
+            case XR_RDPGFX_CAPVERSION_102: /* 0x000A0200 */
+                break;
+            case XR_RDPGFX_CAPVERSION_103: /* 0x000A0301 */
+                break;
+            case XR_RDPGFX_CAPVERSION_104: /* 0x000A0400 */
+                /* RDPGFX_CAPS_FLAG_AVC_DISABLED */
+                if ((flagss[index] & 0x20) == 0)
+                {
+                    best_index = index;
+                }
+                break;
+            case XR_RDPGFX_CAPVERSION_105: /* 0x000A0502 */
+                break;
+            case XR_RDPGFX_CAPVERSION_106: /* 0x000A0600 */
+                break;
+        }
+    }
+    if (best_index >= 0)
+    {
+        LLOGLN(0, ("  replying version 0x%8.8x flags 0x%8.8x",
+               versions[best_index], flagss[best_index]));
+        error = xrdp_egfx_send_capsconfirm(self->egfx,
+                                           versions[best_index],
+                                           flagss[best_index]);
+        LLOGLN(0, ("xrdp_mm_egfx_caps_advertise: xrdp_egfx_send_capsconfirm "
+               "error %d", error));
         if (screen->data != NULL)
         {
             xrdp_egfx_send_create_surface(self->egfx, 1,
@@ -1021,15 +1066,16 @@ xrdp_mm_egfx_caps_advertise(void* user, int version, int flags)
             rect.y1 = 0;
             rect.x2 = screen->width;
             rect.y2 = screen->height;
-            xrdp_egfx_send_wire_to_surface1(self->egfx, 1, 0,
+            xrdp_egfx_send_wire_to_surface1(self->egfx, 1,
+                                            XR_RDPGFX_CODECID_UNCOMPRESSED,
                                             XR_PIXEL_FORMAT_XRGB_8888,
                                             &rect, screen->data,
-                                            screen->width * 4 * screen->height);
+                                            screen->width * 4 *
+                                            screen->height);
             xrdp_egfx_send_frame_end(self->egfx, 1);
 #endif
         }
     }
-
     return 0;
 }
 
@@ -2636,17 +2682,17 @@ xrdp_mm_process_enc_done(struct xrdp_mm *self)
         cy = enc_done->cy;
         if (enc_done->comp_bytes > 0)
         {
-
-            LLOGLN(10, ("xrdp_mm_process_enc_done: x %d y %d cx %d cy %d frame_id %d use_frame_acks %d",
-                   x, y, cx, cy, enc_done->enc->frame_id, self->wm->client_info->use_frame_acks));
-
+            LLOGLN(10, ("xrdp_mm_process_enc_done: x %d y %d cx %d cy %d "
+                   "frame_id %d use_frame_acks %d", x, y, cx, cy,
+                   enc_done->enc->frame_id,
+                   self->wm->client_info->use_frame_acks));
             if (enc_done->flags & 1) /* gfx */
             {
                 xrdp_egfx_send_frame_start(self->egfx, enc_done->enc->frame_id, 0);
-                rect.x1 = 0;
-                rect.y1 = 0;
-                rect.x2 = cx;
-                rect.y2 = cy;
+                rect.x1 = x;
+                rect.y1 = y;
+                rect.x2 = x + cx;
+                rect.y2 = y + cy;
                 xrdp_egfx_send_wire_to_surface1(self->egfx, 1,
                                                 XR_RDPGFX_CODECID_AVC420,
                                                 XR_PIXEL_FORMAT_XRGB_8888,

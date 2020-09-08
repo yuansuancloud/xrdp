@@ -138,7 +138,8 @@ xrdp_painter_send_dirty(struct xrdp_painter *self)
                 rect1.x2 = rect1.x1 + cx;
                 rect1.y2 = rect1.y1 + cy;
                 xrdp_egfx_send_frame_start(mm->egfx, 1, 0);
-                xrdp_egfx_send_wire_to_surface1(mm->egfx, 1, 0,
+                xrdp_egfx_send_wire_to_surface1(mm->egfx, 1,
+                                                XR_RDPGFX_CODECID_UNCOMPRESSED,
                                                 XR_PIXEL_FORMAT_XRGB_8888,
                                                 &rect1, ldata,
                                                 cx * 4 * cy);
@@ -177,8 +178,6 @@ xrdp_painter_create(struct xrdp_wm *wm, struct xrdp_session *session)
     self->session = session;
     self->rop = 0xcc; /* copy will use 0xcc */
     self->clip_children = 1;
-
-
     if (self->session->client_info->no_orders_supported ||
         self->session->client_info->gfx)
     {

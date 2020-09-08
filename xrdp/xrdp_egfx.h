@@ -108,7 +108,7 @@ struct xrdp_egfx
     int frame_id;
     struct stream *s;
     void* user;
-    int (*caps_advertise)(void* user, int version, int flags);
+    int (*caps_advertise)(void* user, int num_caps, int *version, int *flags);
     int (*frame_ack)(void* user, int queue_depth, int frame_id, int frames_decoded);
 };
 

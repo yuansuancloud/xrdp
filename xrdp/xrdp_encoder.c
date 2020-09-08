@@ -83,7 +83,22 @@ xrdp_encoder_create(struct xrdp_mm *mm)
     self = (struct xrdp_encoder *)g_malloc(sizeof(struct xrdp_encoder), 1);
     self->mm = mm;
 
-    if (client_info->jpeg_codec_id != 0)
+    if (client_info->gfx)
+    {
+        LLOGLN(0, ("xrdp_encoder_create: starting h264 codec session gfx"));
+        self->codec_id = client_info->h264_codec_id;
+        self->in_codec_mode = 1;
+        client_info->capture_code = 3;
+        client_info->capture_format =
+            /* XRDP_nv12_709fr */
+            (12 << 24) | (66 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
+        self->process_enc = process_enc_h264;
+        self->gfx = 1;
+#ifdef XRDP_X264
+        self->codec_handle = xrdp_encoder_x264_create();
+#endif
+    }
+    else if (client_info->jpeg_codec_id != 0)
     {
         LLOGLN(0, ("xrdp_encoder_create: starting jpeg codec session"));
         self->codec_id = client_info->jpeg_codec_id;
@@ -118,21 +133,6 @@ xrdp_encoder_create(struct xrdp_mm *mm)
             /* XRDP_nv12 */
             (12 << 24) | (64 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
-#ifdef XRDP_X264
-        self->codec_handle = xrdp_encoder_x264_create();
-#endif
-    }
-    else if (client_info->gfx)
-    {
-        LLOGLN(0, ("xrdp_encoder_create: starting h264 codec session gfx"));
-        self->codec_id = client_info->h264_codec_id;
-        self->in_codec_mode = 1;
-        client_info->capture_code = 3;
-        client_info->capture_format =
-            /* XRDP_nv12_709fr */
-            (12 << 24) | (66 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
-        self->process_enc = process_enc_h264;
-        self->gfx = 1;
 #ifdef XRDP_X264
         self->codec_handle = xrdp_encoder_x264_create();
 #endif

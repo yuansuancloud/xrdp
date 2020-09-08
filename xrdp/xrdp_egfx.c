@@ -279,7 +279,7 @@ xrdp_egfx_send_surface_to_surface(struct xrdp_egfx *egfx, int src_surface_id,
     out_uint32_le(s, bytes);
     bytes = (int) (s->end - s->data);
     error = xrdp_egfx_send_data(egfx, s->data, bytes);
-    LLOGLN(0, ("xrdp_egfx_send_surface_to_surface: "
+    LLOGLN(10, ("xrdp_egfx_send_surface_to_surface: "
            "xrdp_egfx_send_data error %d", error));
     free_stream(s);
     return error;
@@ -569,13 +569,36 @@ xrdp_egfx_process_capsadvertise(struct xrdp_egfx *egfx, struct stream *s)
 {
     int index;
     int capsSetCount;
+    int caps_count;
     int version;
     int capsDataLength;
     int flags;
     char *holdp;
+    int *versions;
+    int *flagss;
 
     LLOGLN(0, ("xrdp_egfx_process_capsadvertise:"));
+    if (egfx->caps_advertise == NULL)
+    {
+        return 0;
+    }
     in_uint16_le(s, capsSetCount);
+    if ((capsSetCount < 1) || (capsSetCount > 1024))
+    {
+        return 1;
+    }
+    caps_count = 0;
+    versions = g_new(int, capsSetCount);
+    if (versions == NULL)
+    {
+        return 1;
+    }
+    flagss = g_new(int, capsSetCount);
+    if (flagss == NULL)
+    {
+        g_free(versions);
+        return 1;
+    }
     for (index = 0; index < capsSetCount; index++)
     {
         if (!s_check_rem(s, 8))
@@ -592,13 +615,18 @@ xrdp_egfx_process_capsadvertise(struct xrdp_egfx *egfx, struct stream *s)
         if (capsDataLength == 4)
         {
             in_uint32_le(s, flags);
-            if (egfx->caps_advertise != NULL)
-            {
-                egfx->caps_advertise(egfx->user, version, flags);
-            }
+            versions[caps_count] = version;
+            flagss[caps_count] = flags;
+            caps_count++;
         }
         s->p = holdp + capsDataLength;
     }
+    if (caps_count > 0)
+    {
+        egfx->caps_advertise(egfx->user, caps_count, versions, flagss);
+    }
+    g_free(versions);
+    g_free(flagss);
     return 0;
 }
 
@@ -617,12 +645,12 @@ xrdp_egfx_process(struct xrdp_egfx *egfx, struct stream *s)
     error = 0;
     while (s_check_rem(s, 8))
     {
+        holdp = s->p;
+        holdend = s->end;
         in_uint16_le(s, cmdId);
         in_uint16_le(s, flags);
         in_uint32_le(s, pduLength);
-        holdp = s->p;
-        holdend = s->end;
-        s->end = s->p + pduLength;
+        s->end = holdp + pduLength;
         LLOGLN(10, ("xrdp_egfx_process: cmdId 0x%x flags %d pduLength %d",
                cmdId, flags, pduLength));
         if (pduLength < 8)
@@ -641,12 +669,16 @@ xrdp_egfx_process(struct xrdp_egfx *egfx, struct stream *s)
             case XR_RDPGFX_CMDID_CAPSADVERTISE:
                 error = xrdp_egfx_process_capsadvertise(egfx, s);
                 break;
+            case XR_RDPGFX_CMDID_QOEFRAMEACKNOWLEDGE:
+                break;
             default:
                 LLOGLN(0, ("xrdp_egfx_process: unknown cmdId 0x%x", cmdId));
+                //g_hexdump(s->p, MIN(pduLength - 8, 64));
                 break;
         }
         if (error != 0)
         {
+            LLOGLN(0, ("xrdp_egfx_process: error %d", error));
             return error;
         }
         s->p = holdp + pduLength;
