@@ -184,6 +184,7 @@ xrdp_encoder_x264_encode(void *handle, int session,
         num_nals = 0;
         frame_size = x264_encoder_encode(xe->x264_enc_han, &nals, &num_nals,
                                          &pic_in, &pic_out);
+        LLOGLN(10, ("i_type %d", pic_out.i_type));
         if (frame_size < 1)
         {
             return 3;

@@ -28,7 +28,7 @@ struct xrdp_encoder
     int frame_id_server_sent;
     int frames_in_flight;
     int gfx;
-    int pad0;
+    int gfx_ack_off;
 };
 
 /* used when scheduling tasks in xrdp_encoder.c */

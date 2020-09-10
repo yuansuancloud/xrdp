@@ -143,8 +143,6 @@ xrdp_encoder_create(struct xrdp_mm *mm)
         return 0;
     }
 
-    LLOGLN(0, ("init_xrdp_encoder: initializing encoder codec_id %d", self->codec_id));
-
     /* setup required FIFOs */
     self->fifo_to_proc = fifo_create();
     self->fifo_processed = fifo_create();
@@ -158,8 +156,16 @@ xrdp_encoder_create(struct xrdp_mm *mm)
     self->xrdp_encoder_event_processed = g_create_wait_obj(buf);
     g_snprintf(buf, 1024, "xrdp_%8.8x_encoder_term", pid);
     self->xrdp_encoder_term = g_create_wait_obj(buf);
-    self->max_compressed_bytes = client_info->max_fastpath_frag_bytes & ~15;
-    self->frames_in_flight = client_info->max_unacknowledged_frame_count;
+    if (client_info->gfx)
+    {
+        self->frames_in_flight = 2;
+        self->max_compressed_bytes = 3145728;
+    }
+    else
+    {
+        self->frames_in_flight = client_info->max_unacknowledged_frame_count;
+        self->max_compressed_bytes = client_info->max_fastpath_frag_bytes & ~15;
+    }
     /* make sure frames_in_flight is at least 1 */
     self->frames_in_flight = MAX(self->frames_in_flight, 1);
 

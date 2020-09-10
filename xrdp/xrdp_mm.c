@@ -1076,6 +1076,20 @@ xrdp_mm_egfx_caps_advertise(void* user, int caps_count,
 #endif
         }
     }
+    else
+    {
+        struct xrdp_rect lrect;
+
+        LLOGLN(0, ("xrdp_mm_egfx_caps_advertise: no good gfx, canceling"));
+        lrect.left = 0;
+        lrect.top = 0;
+        lrect.right = screen->width;
+        lrect.bottom = screen->height;
+        self->wm->client_info->gfx = 0;
+        xrdp_encoder_delete(self->encoder);
+        self->encoder = xrdp_encoder_create(self);
+        xrdp_bitmap_invalidate(screen, &lrect);
+    }
     return 0;
 }
 
@@ -1093,6 +1107,27 @@ xrdp_mm_egfx_frame_ack(void* user, int queue_depth, int frame_id,
     LLOGLN(10, ("xrdp_mm_egfx_frame_ack:"));
     self = (struct xrdp_mm *) user;
     encoder = self->encoder;
+    if (queue_depth == -1) /* SUSPEND_FRAME_ACKNOWLEDGEMENT */
+    {
+        LLOGLN(0, ("xrdp_mm_egfx_frame_ack: queue_depth %d frame_id %d "
+               "frames_decoded %d", queue_depth, frame_id, frames_decoded));
+        if (encoder->gfx_ack_off == 0)
+        {
+            LLOGLN(0, ("xrdp_mm_egfx_frame_ack: client request turn off "
+                   "frame acks"));
+            encoder->gfx_ack_off = 1;
+            frame_id = -1;
+        }
+    }
+    else
+    {
+        if (encoder->gfx_ack_off)
+        {
+            LLOGLN(0, ("xrdp_mm_egfx_frame_ack: client request turn on "
+                   "frame acks"));
+            encoder->gfx_ack_off = 0;
+        }
+    }
     LLOGLN(10, ("xrdp_mm_egfx_frame_ack: incoming %d, client %d, server %d",
            frame_id, encoder->frame_id_client, encoder->frame_id_server));
     if ((frame_id < 0) || (frame_id > encoder->frame_id_server))
@@ -2688,7 +2723,8 @@ xrdp_mm_process_enc_done(struct xrdp_mm *self)
                    self->wm->client_info->use_frame_acks));
             if (enc_done->flags & 1) /* gfx */
             {
-                xrdp_egfx_send_frame_start(self->egfx, enc_done->enc->frame_id, 0);
+                xrdp_egfx_send_frame_start(self->egfx,
+                                           enc_done->enc->frame_id, 0);
                 rect.x1 = x;
                 rect.y1 = y;
                 rect.x2 = x + cx;
@@ -2697,7 +2733,8 @@ xrdp_mm_process_enc_done(struct xrdp_mm *self)
                                                 XR_RDPGFX_CODECID_AVC420,
                                                 XR_PIXEL_FORMAT_XRGB_8888,
                                                 &rect,
-                                                enc_done->comp_pad_data + enc_done->pad_bytes,
+                                                enc_done->comp_pad_data +
+                                                    enc_done->pad_bytes,
                                                 enc_done->comp_bytes);
                 xrdp_egfx_send_frame_end(self->egfx, enc_done->enc->frame_id);
             }
@@ -2720,17 +2757,35 @@ xrdp_mm_process_enc_done(struct xrdp_mm *self)
         if (enc_done->last)
         {
             LLOGLN(10, ("xrdp_mm_process_enc_done: last set"));
-            if ((self->wm->client_info->use_frame_acks == 0) &&
-                ((enc_done->flags & 1) == 0))
+            if (enc_done->flags & 1) /* gfx */
             {
-                self->mod->mod_frame_ack(self->mod,
-                                         enc_done->enc->flags,
-                                         enc_done->enc->frame_id);
+                if (self->encoder->gfx_ack_off)
+                {
+                    /* gfx and client turned off client frame acks */
+                    self->mod->mod_frame_ack(self->mod,
+                                             enc_done->enc->flags,
+                                             enc_done->enc->frame_id);
+                }
+                else
+                {
+                    self->encoder->frame_id_server = enc_done->enc->frame_id;
+                    xrdp_mm_update_module_frame_ack(self);
+                }
             }
             else
             {
-                self->encoder->frame_id_server = enc_done->enc->frame_id;
-                xrdp_mm_update_module_frame_ack(self);
+                if (self->wm->client_info->use_frame_acks == 0)
+                {
+                    /* surface commmand and client does not do frame acks */
+                    self->mod->mod_frame_ack(self->mod,
+                                             enc_done->enc->flags,
+                                             enc_done->enc->frame_id);
+                }
+                else
+                {
+                    self->encoder->frame_id_server = enc_done->enc->frame_id;
+                    xrdp_mm_update_module_frame_ack(self);
+                }
             }
             g_free(enc_done->enc->drects);
             g_free(enc_done->enc->crects);
