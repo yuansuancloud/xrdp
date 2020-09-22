@@ -300,6 +300,7 @@ struct xrdp_mm
   int cs2xr_cid_map[256];
   int xr2cr_cid_map[256];
   struct xrdp_egfx *egfx;
+  int egfx_up;
 };
 
 struct xrdp_key_info
@@ -385,6 +386,10 @@ struct xrdp_wm
 
   /* configuration derived from xrdp.ini */
   struct xrdp_config *xrdp_config;
+
+  struct xrdp_region *screen_dirty_region;
+  int last_screen_draw_time;
+
 };
 
 /* rdp process */

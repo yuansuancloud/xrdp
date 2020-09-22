@@ -76,8 +76,6 @@ xrdp_painter_add_dirty_rect(struct xrdp_painter *self, int x, int y,
     return 0;
 }
 
-#include "xrdp_egfx.h"
-
 /*****************************************************************************/
 static int
 xrdp_painter_send_dirty(struct xrdp_painter *self)
@@ -103,59 +101,55 @@ xrdp_painter_send_dirty(struct xrdp_painter *self)
         Bpp = 4;
     }
 
-    jndex = 0;
-    error = xrdp_region_get_rect(self->dirty_region, jndex, &rect);
-    while (error == 0)
+    if (self->session->client_info->gfx)
     {
-        cx = rect.right - rect.left;
-        cy = rect.bottom - rect.top;
-        ldata = (char *)g_malloc(cx * cy * Bpp, 0);
-        if (ldata == 0)
+        if (self->wm->screen_dirty_region == NULL)
         {
-            return 1;
+            self->wm->screen_dirty_region = xrdp_region_create(self->wm);
         }
-        src = self->wm->screen->data;
-        src += self->wm->screen->line_size * rect.top;
-        src += rect.left * Bpp;
-        dst = ldata;
-        for (index = 0; index < cy; index++)
+        jndex = 0;
+        error = xrdp_region_get_rect(self->dirty_region, jndex, &rect);
+        while (error == 0)
         {
-            g_memcpy(dst, src, cx * Bpp);
-            src += self->wm->screen->line_size;
-            dst += cx * Bpp;
+            xrdp_region_add_rect(self->wm->screen_dirty_region, &rect);
+            jndex++;
+            error = xrdp_region_get_rect(self->dirty_region, jndex, &rect);
         }
-        LLOGLN(10, ("xrdp_painter_send_dirty: x %d y %d cx %d cy %d",
-               rect.left, rect.top, cx, cy));
-
-        if (self->session->client_info->gfx)
+    }
+    else
+    {
+        jndex = 0;
+        error = xrdp_region_get_rect(self->dirty_region, jndex, &rect);
+        while (error == 0)
         {
-            struct xrdp_mm* mm = self->wm->mm;
-            if (mm->egfx != NULL)
+            cx = rect.right - rect.left;
+            cy = rect.bottom - rect.top;
+            ldata = (char *)g_malloc(cx * cy * Bpp, 0);
+            if (ldata == 0)
             {
-                struct xrdp_egfx_rect rect1;
-                rect1.x1 = rect.left;
-                rect1.y1 = rect.top;
-                rect1.x2 = rect1.x1 + cx;
-                rect1.y2 = rect1.y1 + cy;
-                xrdp_egfx_send_frame_start(mm->egfx, 1, 0);
-                xrdp_egfx_send_wire_to_surface1(mm->egfx, 1,
-                                                XR_RDPGFX_CODECID_UNCOMPRESSED,
-                                                XR_PIXEL_FORMAT_XRGB_8888,
-                                                &rect1, ldata,
-                                                cx * 4 * cy);
-                xrdp_egfx_send_frame_end(mm->egfx, 1);
+                return 1;
             }
-        }
-        else
-        {
+            src = self->wm->screen->data;
+            src += self->wm->screen->line_size * rect.top;
+            src += rect.left * Bpp;
+            dst = ldata;
+            for (index = 0; index < cy; index++)
+            {
+                g_memcpy(dst, src, cx * Bpp);
+                src += self->wm->screen->line_size;
+                dst += cx * Bpp;
+            }
+            LLOGLN(10, ("xrdp_painter_send_dirty: x %d y %d cx %d cy %d",
+                   rect.left, rect.top, cx, cy));
+
             libxrdp_send_bitmap(self->session, cx, cy, bpp,
                                 ldata, rect.left, rect.top, cx, cy);
+
+            g_free(ldata);
+
+            jndex++;
+            error = xrdp_region_get_rect(self->dirty_region, jndex, &rect);
         }
-
-        g_free(ldata);
-
-        jndex++;
-        error = xrdp_region_get_rect(self->dirty_region, jndex, &rect);
     }
 
     xrdp_region_delete(self->dirty_region);

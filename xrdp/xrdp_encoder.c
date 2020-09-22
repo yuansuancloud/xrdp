@@ -80,7 +80,11 @@ xrdp_encoder_create(struct xrdp_mm *mm)
         return 0;
     }
 
-    self = (struct xrdp_encoder *)g_malloc(sizeof(struct xrdp_encoder), 1);
+    self = g_new0(struct xrdp_encoder, 1);
+    if (self == NULL)
+    {
+        return NULL;
+    }
     self->mm = mm;
 
     if (client_info->gfx)
@@ -184,7 +188,7 @@ xrdp_encoder_delete(struct xrdp_encoder *self)
     FIFO *fifo;
 
     LLOGLN(0, ("xrdp_encoder_delete:"));
-    if (self == 0)
+    if (self == NULL)
     {
         return;
     }
@@ -220,7 +224,7 @@ xrdp_encoder_delete(struct xrdp_encoder *self)
         while (!fifo_is_empty(fifo))
         {
             enc = (XRDP_ENC_DATA *) fifo_remove_item(fifo);
-            if (enc == 0)
+            if (enc == NULL)
             {
                 continue;
             }
@@ -238,7 +242,7 @@ xrdp_encoder_delete(struct xrdp_encoder *self)
         while (!fifo_is_empty(fifo))
         {
             enc_done = (XRDP_ENC_DATA_DONE *) fifo_remove_item(fifo);
-            if (enc_done == 0)
+            if (enc_done == NULL)
             {
                 continue;
             }
@@ -297,8 +301,8 @@ process_enc_jpg(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
             LLOGLN(0, ("process_enc_jpg: error 2"));
             return 1;
         }
-        out_data = (char *) g_malloc(out_data_bytes + 256 + 2, 0);
-        if (out_data == 0)
+        out_data = g_new(char, out_data_bytes + 256 + 2);
+        if (out_data == NULL)
         {
             LLOGLN(0, ("process_enc_jpg: error 3"));
             return 1;
@@ -319,8 +323,12 @@ process_enc_jpg(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
             return 1;
         }
         LLOGLN(10, ("jpeg error %d bytes %d", error, out_data_bytes));
-        enc_done = (XRDP_ENC_DATA_DONE *)
-                   g_malloc(sizeof(XRDP_ENC_DATA_DONE), 1);
+        enc_done = g_new0(XRDP_ENC_DATA_DONE, 1);
+        if (enc_done == NULL)
+        {
+            LLOGLN(0, ("process_enc_jpg: error 3"));
+            return 1;
+        }
         enc_done->comp_bytes = out_data_bytes + 2;
         enc_done->pad_bytes = 256;
         enc_done->comp_pad_data = out_data;
@@ -543,8 +551,8 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
 
     out_data_bytes = 16 * 1024 * 1024;
     index = 256 + 16 + 2 + enc->num_drects * 8;
-    out_data = (char *) g_malloc(out_data_bytes + index, 1);
-    if (out_data == 0)
+    out_data = g_new(char, out_data_bytes + index);
+    if (out_data == NULL)
     {
         return 0;
     }
@@ -632,8 +640,11 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     n_save_data(s->p, out_data_bytes, enc->width, enc->height);
 #endif
 
-    enc_done = (XRDP_ENC_DATA_DONE *)
-               g_malloc(sizeof(XRDP_ENC_DATA_DONE), 1);
+    enc_done = g_new0(XRDP_ENC_DATA_DONE, 1);
+    if (enc_done == NULL)
+    {
+        return 0;
+    }
     enc_done->comp_bytes = comp_bytes_pre + out_data_bytes;
     enc_done->pad_bytes = 256;
     enc_done->comp_pad_data = out_data;
@@ -690,7 +701,7 @@ proc_enc_msg(void *arg)
     LLOGLN(0, ("proc_enc_msg: thread is running"));
 
     self = (struct xrdp_encoder *) arg;
-    if (self == 0)
+    if (self == NULL)
     {
         LLOGLN(0, ("proc_enc_msg: self nil"));
         return 0;
