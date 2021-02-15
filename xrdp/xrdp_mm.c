@@ -1235,6 +1235,11 @@ xrdp_mm_egfx_caps_advertise(void* user, int caps_count,
         }
         xrdp_region_add_rect(self->wm->screen_dirty_region, &xr_rect);
         self->encoder = xrdp_encoder_create(self);
+        if (self->wm->gfx_delay_autologin)
+        {
+            self->wm->gfx_delay_autologin = 0;
+            xrdp_wm_set_login_mode(self->wm, 2);
+        }
     }
     else
     {

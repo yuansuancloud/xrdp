@@ -773,8 +773,14 @@ xrdp_wm_init(struct xrdp_wm *self)
                     list_add_item(self->mm->login_names, (long)g_strdup(q));
                     list_add_item(self->mm->login_values, (long)g_strdup(r));
                 }
-
-                xrdp_wm_set_login_mode(self, 2);
+                if (self->session->client_info->gfx == 0)
+                {
+                    xrdp_wm_set_login_mode(self, 2);
+                }
+                else
+                {
+                    self->gfx_delay_autologin = 1;
+                }
             }
             else
             {
