@@ -2046,6 +2046,11 @@ xrdp_sec_process_mcs_data_CS_CORE(struct xrdp_sec *self, struct stream *s)
     {
         self->rdp_layer->client_info.bpp = 32;
     }
+    if (earlyCapabilityFlags & 0x100) /* RNS_UD_CS_SUPPORT_DYNVC_GFX_PROTOCOL */
+    {
+        g_writeln("client supports gfx");
+        self->rdp_layer->client_info.gfx = 1;
+    }
 
     if (!s_check_rem(s, 64))
     {

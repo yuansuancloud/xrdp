@@ -173,6 +173,7 @@ struct xrdp_client_info
 
     int enable_token_login;
     char domain_user_separator[16];
+    int gfx;
 };
 
 /* yyyymmdd of last incompatible change to xrdp_client_info */
