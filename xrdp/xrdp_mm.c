@@ -1567,12 +1567,13 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
 
 /******************************************************************************/
 int
-xrdp_mm_drdynvc_up(struct xrdp_mm *self)
+dynamic_monitor_initialize(struct xrdp_mm *self)
 {
-    LOG_DEVEL(LOG_LEVEL_TRACE, "xrdp_mm_drdynvc_up:");
     struct xrdp_drdynvc_procs d_procs;
     int flags;
     int error;
+
+    LOG_DEVEL(LOG_LEVEL_TRACE, "dynamic_monitor_initialize:");
 
     g_memset(&d_procs, 0, sizeof(d_procs));
     d_procs.open_response = dynamic_monitor_open_response;
@@ -1586,10 +1587,15 @@ xrdp_mm_drdynvc_up(struct xrdp_mm *self)
                                  &(self->dynamic_monitor_chanid));
     if (error != 0)
     {
-        LOG_DEVEL(LOG_LEVEL_INFO, "xrdp_mm_drdynvc_up: libxrdp_drdynvc_open failed %d", error);
-        return 1;
+        LOG(LOG_LEVEL_ERROR, "xrdp_mm_drdynvc_up: "
+            "libxrdp_drdynvc_open failed %d", error);
     }
+    return error;
+}
 
+int
+egfx_initialize(struct xrdp_mm *self)
+{
     /* 0x100 RNS_UD_CS_SUPPORT_DYNVC_GFX_PROTOCOL */
     if (self->wm->client_info->mcs_early_capability_flags & 0x100)
     {
@@ -1607,6 +1613,21 @@ xrdp_mm_drdynvc_up(struct xrdp_mm *self)
         }
     }
     return 0;
+}
+
+/******************************************************************************/
+int
+xrdp_mm_drdynvc_up(struct xrdp_mm *self)
+{
+    int error = 0;
+
+    LOG_DEVEL(LOG_LEVEL_TRACE, "xrdp_mm_drdynvc_up:");
+    error = dynamic_monitor_initialize(self);
+    if (error != 0) {
+        return error;
+    }
+    error = egfx_initialize(self);
+    return error;
 }
 
 /******************************************************************************/
