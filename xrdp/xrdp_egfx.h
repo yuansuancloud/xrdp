@@ -114,6 +114,7 @@ struct xrdp_egfx
 {
     struct xrdp_session *session;
     int channel_id;
+    int surface_id;
     int frame_id;
     struct stream *s;
     void* user;

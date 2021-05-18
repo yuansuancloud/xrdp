@@ -843,6 +843,7 @@ xrdp_egfx_create(struct xrdp_mm *mm, struct xrdp_egfx **egfx)
     LLOGLN(0, ("xrdp_egfx_create: error %d channel_id %d",
            error, self->channel_id));
     self->session = process->session;
+    self->surface_id = 0;
     *egfx = self;
     return 0;
 }
