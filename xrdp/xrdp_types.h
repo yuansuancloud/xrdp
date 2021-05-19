@@ -312,6 +312,7 @@ struct xrdp_mm
     int egfx_up;
     int egfx_flags;
     int gfx_delay_autologin;
+    int resizing;
 };
 
 struct xrdp_key_info

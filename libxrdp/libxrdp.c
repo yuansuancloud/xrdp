@@ -1376,6 +1376,10 @@ libxrdp_send_to_channel(struct xrdp_session *session, int channel_id,
         free_stream(s);
         return 1;
     }
+    else
+    {
+        LOG(LOG_LEVEL_TRACE, "libxrdp_send_to_channel: xrdp_channel_init successful!");
+    }
 
     /* here we make a copy of the data */
     out_uint8a(s, data, data_len);

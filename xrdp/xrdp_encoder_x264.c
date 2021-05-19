@@ -28,6 +28,7 @@
 #include <inttypes.h>
 #include <x264.h>
 
+#include "xrdp.h"
 #include "arch.h"
 #include "os_calls.h"
 #include "xrdp_encoder_x264.h"
@@ -113,11 +114,12 @@ xrdp_encoder_x264_encode(void *handle, int session,
     x264_nal_t *nals;
     int num_nals;
     int frame_size;
+    int frame_area;
 
     x264_picture_t pic_in;
     x264_picture_t pic_out;
 
-    LLOGLN(10, ("xrdp_encoder_x264_encode:"));
+    LOG(LOG_LEVEL_TRACE, "xrdp_encoder_x264_encode:");
     xg = (struct x264_global *) handle;
     xe = &(xg->encoders[session]);
     if ((xe->x264_enc_han == 0) || (xe->width != width) || (xe->height != height))
@@ -176,7 +178,9 @@ xrdp_encoder_x264_encode(void *handle, int session,
         src8 = data;
         src8 += width * height;
         dst8 = xe->yuvdata;
-        dst8 += xe->x264_params.i_width * xe->x264_params.i_height;
+
+        frame_area = xe->x264_params.i_width * xe->x264_params.i_height - 1;
+        dst8 += frame_area;
         for (index = 0; index < height; index += 2)
         {
             g_memcpy(dst8, src8, width);
@@ -188,9 +192,8 @@ xrdp_encoder_x264_encode(void *handle, int session,
         pic_in.img.i_csp = X264_CSP_NV12;
         pic_in.img.i_plane = 2;
         pic_in.img.plane[0] = (unsigned char *) (xe->yuvdata);
-        pic_in.img.plane[1] = (unsigned char *) (xe->yuvdata +
-                     xe->x264_params.i_width * xe->x264_params.i_height);
-        pic_in.img.i_stride[0] = xe->x264_params.i_width;
+        pic_in.img.plane[1] = (unsigned char *) (xe->yuvdata + frame_area);
+        pic_in.img.i_stride[0] = width;
         pic_in.img.i_stride[1] = xe->x264_params.i_width;
         num_nals = 0;
         frame_size = x264_encoder_encode(xe->x264_enc_han, &nals, &num_nals,

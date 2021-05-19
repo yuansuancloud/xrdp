@@ -2324,12 +2324,12 @@ xrdp_sec_process_mcs_data_monitors(struct xrdp_sec *self, struct stream *s)
     /* this is an option set in xrdp.ini */
     if (client_info->multimon != 1) /* are multi-monitors allowed ? */
     {
-        LOG(LOG_LEVEL_INFO, "Multi-monitor is disabled by server config");
-        return 0;
+         LOG(LOG_LEVEL_INFO, "Multi-monitor is disabled by server config");
+         return 0;
     }
     if (!s_check_rem_and_log(s, 8, "Parsing [MS-RDPBCGR] TS_UD_CS_MONITOR"))
     {
-        return 1;
+         return 1;
     }
     in_uint32_le(s, flags); /* flags */
     in_uint32_le(s, monitorCount);
@@ -2345,7 +2345,7 @@ xrdp_sec_process_mcs_data_monitors(struct xrdp_sec *self, struct stream *s)
         return 1;
     }
     //verify monitorCount - max 16
-    if (monitorCount > 16)
+    if (monitorCount > XRDP_MAXIMUM_MONITORS)
     {
         LOG(LOG_LEVEL_ERROR,
             "[MS-RDPBCGR] Protocol error: TS_UD_CS_MONITOR monitorCount "

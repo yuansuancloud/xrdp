@@ -59,6 +59,8 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc);
 struct xrdp_encoder *
 xrdp_encoder_create(struct xrdp_mm *mm)
 {
+    LOG(LOG_LEVEL_INFO, "xrdp_encoder_create:");
+
     struct xrdp_encoder *self;
     struct xrdp_client_info *client_info;
     char buf[1024];
@@ -769,7 +771,7 @@ proc_enc_msg(void *arg)
 
         if (g_is_wait_obj_set(lterm_obj)) /* xrdp_mm term */
         {
-            LOG_DEVEL(LOG_LEVEL_DEBUG, "proc_enc_msg: xrdp_mm term");
+            LOG(LOG_LEVEL_INFO, "proc_enc_msg: xrdp_mm term");
             break;
         }
 

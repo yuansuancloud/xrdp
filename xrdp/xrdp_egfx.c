@@ -31,18 +31,16 @@
 #include "parse.h"
 #include "xrdp.h"
 #include "xrdp_egfx.h"
+#include "libxrdp.h"
+#include "xrdp_channel.h"
 
 #define LLOG_LEVEL 1
 #define LLOGLN(_level, _args) \
-  do \
-  { \
     if (_level < LLOG_LEVEL) \
     { \
         g_write("xrdp:xrdp_egfx [%10.10u]: ", g_time3()); \
         g_writeln _args ; \
-    } \
-  } \
-  while (0)
+    }
 
 
 /******************************************************************************/
@@ -406,7 +404,7 @@ xrdp_egfx_send_wire_to_surface1(struct xrdp_egfx *egfx, int surface_id,
     char *hold_segment_count;
     char *bitmap_data8;
 
-    LLOGLN(10, ("xrdp_egfx_send_wire_to_surface1:"));
+    LOG(LOG_LEVEL_TRACE, "xrdp_egfx_send_wire_to_surface1:");
     make_stream(s);
     bytes = bitmap_data_length + 8192;
     bytes += 5 * (bitmap_data_length / 0xFFFF);
@@ -545,7 +543,7 @@ xrdp_egfx_send_reset_graphics(struct xrdp_egfx *egfx, int width, int height,
     int index;
     struct stream *s;
 
-    LLOGLN(0, ("xrdp_egfx_send_reset_graphics:"));
+    LOG(LOG_LEVEL_INFO, "xrdp_egfx_send_reset_graphics:");
     if (monitor_count > 16)
     {
         return 1;
@@ -563,14 +561,12 @@ xrdp_egfx_send_reset_graphics(struct xrdp_egfx *egfx, int width, int height,
     out_uint32_le(s, width);
     out_uint32_le(s, height);
     out_uint32_le(s, monitor_count == 0 ? 1 : monitor_count);
-    LOG(LOG_LEVEL_INFO, "xrdp_egfx_send_reset_graphics: width %d height %d monitorcount %d",
-        width, height, monitor_count);
     if (monitor_count == 0)
     {
         out_uint32_le(s, 0);
         out_uint32_le(s, 0);
-        out_uint32_le(s, width);
-        out_uint32_le(s, height);
+        out_uint32_le(s, width - 1);
+        out_uint32_le(s, height - 1);
         out_uint32_le(s, 1);
         monitor_count = 1;
     }
@@ -587,6 +583,8 @@ xrdp_egfx_send_reset_graphics(struct xrdp_egfx *egfx, int width, int height,
                 index, mi[index].left, mi[index].top, mi[index].right, mi[index].bottom, mi[index].is_primary);
         }
     }
+    LOG(LOG_LEVEL_INFO, "xrdp_egfx_send_reset_graphics: width %d height %d monitorcount %d",
+        width, height, monitor_count);
     if (monitor_count < 16)
     {
         bytes = 340 - (20 + (monitor_count * 20));
@@ -758,7 +756,7 @@ xrdp_egfx_process(struct xrdp_egfx *egfx, struct stream *s)
 static int
 xrdp_egfx_open_response(intptr_t id, int chan_id, int creation_status)
 {
-    LLOGLN(0, ("xrdp_egfx_open_response:"));
+    LOG(LOG_LEVEL_TRACE, "xrdp_egfx_open_response:");
     return 0;
 }
 
@@ -767,7 +765,7 @@ xrdp_egfx_open_response(intptr_t id, int chan_id, int creation_status)
 static int
 xrdp_egfx_close_response(intptr_t id, int chan_id)
 {
-    LLOGLN(0, ("xrdp_egfx_close_response:"));
+    LOG(LOG_LEVEL_TRACE, "xrdp_egfx_close_response:");
     return 0;
 }
 
@@ -780,12 +778,12 @@ xrdp_egfx_data_first(intptr_t id, int chan_id, char *data, int bytes,
     struct xrdp_process *process;
     struct xrdp_egfx *egfx;
 
-    LLOGLN(10, ("xrdp_egfx_data_first: bytes %d total_bytes %d", bytes, total_bytes));
+    LOG(LOG_LEVEL_INFO, "xrdp_egfx_data_first: bytes %d total_bytes %d", bytes, total_bytes);
     process = (struct xrdp_process *) id;
     egfx = process->wm->mm->egfx;
     if (egfx->s != NULL)
     {
-        LLOGLN(0, ("xrdp_egfx_data_first: error"));
+        LOG(LOG_LEVEL_INFO, "xrdp_egfx_data_first: Error! Stream is not working on initial data received!");
     }
     make_stream(egfx->s);
     init_stream(egfx->s, total_bytes);
@@ -856,9 +854,9 @@ xrdp_egfx_create(struct xrdp_mm *mm, struct xrdp_egfx **egfx)
                                  "Microsoft::Windows::RDS::Graphics",
                                  1, /* WTS_CHANNEL_OPTION_DYNAMIC */
                                  &procs, &(self->channel_id));
-    LLOGLN(0, ("xrdp_egfx_create: error %d channel_id %d",
-           error, self->channel_id));
+    LOG(LOG_LEVEL_INFO, "xrdp_egfx_create: error %d channel_id %d", error, self->channel_id);
     self->session = process->session;
+    self->surface_id = 0;
     *egfx = self;
     return 0;
 }
@@ -867,7 +865,17 @@ xrdp_egfx_create(struct xrdp_mm *mm, struct xrdp_egfx **egfx)
 int
 xrdp_egfx_delete(struct xrdp_egfx *egfx)
 {
-    g_free(egfx);
-    return 0;
-}
+    LOG(LOG_LEVEL_INFO, "xrdp_egfx_delete:");
 
+    int error = xrdp_egfx_send_delete_surface(egfx, egfx->surface_id);
+    if (error != 0)
+    {
+        LOG_DEVEL(LOG_LEVEL_INFO, "dynamic_monitor_data: xrdp_egfx_send_delete_surface failed %d", error);
+        return error;
+    }
+    error = libxrdp_drdynvc_close(egfx->session, egfx->channel_id);
+
+    g_free(egfx);
+
+    return error;
+}

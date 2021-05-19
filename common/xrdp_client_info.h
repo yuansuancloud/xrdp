@@ -25,13 +25,25 @@
 
 #define XRDP_MAXIMUM_MONITORS 16
 
+/*
+ * 2.2.1.3.6.1 Monitor Definition (TS_MONITOR_DEF)
+ * 2.2.1.3.9.1 Monitor Attributes (TS_MONITOR_ATTRIBUTES)
+ */
 struct monitor_info
 {
     int left;
     int top;
+    int width;
+    int height;
     int right;
     int bottom;
+    int physical_width;
+    int physical_height;
+    int orientation;
+    int desktop_scale_factor;
+    int device_scale_factor;
     int is_primary;
+    int flags;
 };
 
 /**
