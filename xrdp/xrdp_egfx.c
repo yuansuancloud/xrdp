@@ -859,6 +859,7 @@ xrdp_egfx_create(struct xrdp_mm *mm, struct xrdp_egfx **egfx)
     LLOGLN(0, ("xrdp_egfx_create: error %d channel_id %d",
            error, self->channel_id));
     self->session = process->session;
+    self->global_surface_id = 1;
     *egfx = self;
     return 0;
 }
@@ -867,6 +868,7 @@ xrdp_egfx_create(struct xrdp_mm *mm, struct xrdp_egfx **egfx)
 int
 xrdp_egfx_delete(struct xrdp_egfx *egfx)
 {
+    libxrdp_drdynvc_close(egfx->session, egfx->channel_id);
     g_free(egfx);
     return 0;
 }

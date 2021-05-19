@@ -115,6 +115,7 @@ struct xrdp_egfx
     struct xrdp_session *session;
     int channel_id;
     int frame_id;
+    int global_surface_id;
     struct stream *s;
     void* user;
     int (*caps_advertise)(void* user, int num_caps, int *version, int *flags);
