@@ -1575,6 +1575,11 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct xrdp_mm_resize_de
     struct xrdp_mm* mm = wm->mm;
     struct xrdp_mod* module = mm->mod;
 
+    if (wm->client_info->suppress_output == 1) {
+        LOG(LOG_LEVEL_INFO, "process_dynamic_monitor_description: Not allowing resize. Suppress output is active.");
+        return 0;
+    }
+
     mm->resizing = 1;
 
 #ifdef XRDP_X264
@@ -3116,7 +3121,6 @@ xrdp_mm_get_wait_objs(struct xrdp_mm *self,
                                               write_objs, wcount, timeout);
         }
     }
-
     if (self->encoder != 0)
     {
         read_objs[(*rcount)++] = self->encoder->xrdp_encoder_event_processed;
@@ -3138,13 +3142,6 @@ xrdp_mm_get_wait_objs(struct xrdp_mm *self,
             }
         }
     }
-    if (self->resize_queue->count > 0 && self->resizing == 0) {
-        struct xrdp_mm_resize_description *description = (struct xrdp_mm_resize_description*)list_get_item(self->resize_queue, 0);
-        list_remove_item(self->resize_queue, 0);
-        process_dynamic_monitor_description(self->wm, description);
-        g_free(description);
-    }
-
     return rv;
 }
 
@@ -3463,15 +3460,19 @@ xrdp_mm_check_wait_objs(struct xrdp_mm *self)
                 }
             }
         }
-        else
+#ifdef XRDP_X264
+        else if (self->resize_queue->count > 0 && self->resizing == 0 && self->mod != 0 && self->encoder != 0 && self->egfx_up == 1)
+#else
+        else if (self->resize_queue->count > 0 && self->resizing == 0 && self->mod != 0)
+#endif
         {
-            LOG_DEVEL(LOG_LEVEL_TRACE, "xrdp_mm_check_wait_objs: empty");
+            struct xrdp_mm_resize_description *description = (struct xrdp_mm_resize_description*)list_get_item(self->resize_queue, 0);
+            list_remove_item(self->resize_queue, 0);
+            LOG(LOG_LEVEL_INFO, "xrdp_mm_get_wait_objs: Processing resize to: %d x %d", description->session_width, description->session_height);
+            process_dynamic_monitor_description(self->wm, description);
+            g_free(description);
         }
     }
-
-    // Check the resizing situation.
-
-
     return rv;
 }
 
