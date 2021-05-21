@@ -27,6 +27,7 @@
 #include "xrdp_rail.h"
 #include "xrdp_constants.h"
 #include "fifo.h"
+#include "xrdp_client_info.h"
 
 #define MAX_NR_CHANNELS 16
 #define MAX_CHANNEL_NAME 16
@@ -283,6 +284,15 @@ struct xrdp_cache
 /* defined later */
 struct xrdp_enc_data;
 
+struct xrdp_mm_resize_description
+{
+    int monitorCount; /* number of monitors detected (max = 16) */
+    struct monitor_info minfo[XRDP_MAXIMUM_MONITORS]; /* client monitor data */
+    struct monitor_info minfo_wm[XRDP_MAXIMUM_MONITORS]; /* client monitor data, non-negative values */
+    int session_width;
+    int session_height;
+};
+
 struct xrdp_mm
 {
     struct xrdp_wm *wm; /* owner */
@@ -312,6 +322,7 @@ struct xrdp_mm
     int egfx_up;
     int egfx_flags;
     int gfx_delay_autologin;
+    struct list *resize_queue;
     int resizing;
 };
 

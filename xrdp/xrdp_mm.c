@@ -53,6 +53,7 @@ xrdp_mm_create(struct xrdp_wm *owner)
     self->login_names = list_create();
     self->login_names->auto_free = 1;
     self->login_values = list_create();
+    self->resize_queue = list_create();
     self->login_values->auto_free = 1;
 
     LOG_DEVEL(LOG_LEVEL_INFO, "xrdp_mm_create: bpp %d mcs_connection_type %d "
@@ -155,6 +156,7 @@ xrdp_mm_delete(struct xrdp_mm *self)
     self->sesman_trans_up = 0;
     list_delete(self->login_names);
     list_delete(self->login_values);
+    list_delete(self->resize_queue);
     xrdp_egfx_delete(self->egfx);
     g_free(self);
 }
@@ -1414,7 +1416,6 @@ egfx_initialize(struct xrdp_mm *self)
 static int
 dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
 {
-    int error = 0;
     struct stream ls;
     struct stream *s;
     int msg_type;
@@ -1427,9 +1428,7 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
 
     struct monitor_info *monitor_layout;
 
-    struct xrdp_rect rect;
-    int session_width;
-    int session_height;
+    struct xrdp_rect rect = {8192, 8192, -8192, -8192};
 
     LOG(LOG_LEVEL_INFO, "dynamic_monitor_data:");
     pro = (struct xrdp_process *) id;
@@ -1439,12 +1438,6 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
         LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: Not allowing resize. Suppress output is active.");
         return 0;
     }
-
-    if (wm->mm->resizing == 1) {
-        LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: Not allowing resize as resizing is already in progress.");
-        return 0;
-    }
-    wm->mm->resizing = 1;
 
     g_memset(&ls, 0, sizeof(ls));
     ls.data = data;
@@ -1457,129 +1450,132 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
     LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: msg_type %d msg_length %d",
            msg_type, msg_length);
 
-    rect.left = 8192;
-    rect.top = 8192;
-    rect.right = -8192;
-    rect.bottom = -8192;
-
-    if (msg_type == DISPLAYCONTROL_PDU_TYPE_MONITOR_LAYOUT)
+    if (msg_type != DISPLAYCONTROL_PDU_TYPE_MONITOR_LAYOUT)
     {
-        in_uint32_le(s, MonitorLayoutSize);
-        in_uint32_le(s, NumMonitor);
-        LOG(LOG_LEVEL_DEBUG, "  MonitorLayoutSize %d NumMonitor %d",
-               MonitorLayoutSize, NumMonitor);
-
-        //verify monitorCount - max 16
-        if (NumMonitor > XRDP_MAXIMUM_MONITORS)
-        {
-            LOG(LOG_LEVEL_ERROR,
-                "[MS-RDPBCGR] Protocol error: TS_UD_CS_MONITOR monitorCount "
-                "MUST be less than 16, received: %d", NumMonitor);
-            return 1;
-        }
-
-        wm->client_info->monitorCount = NumMonitor;
-
-        int got_primary = 0;
-
-        for (int monitor_index = 0; monitor_index < NumMonitor; ++monitor_index)
-        {
-            monitor_layout = wm->client_info->minfo + monitor_index;
-            in_uint32_le(s, monitor_layout->flags);
-            in_uint32_le(s, monitor_layout->left);
-            in_uint32_le(s, monitor_layout->top);
-            in_uint32_le(s, monitor_layout->width);
-            in_uint32_le(s, monitor_layout->height);
-            in_uint32_le(s, monitor_layout->physical_width);
-            in_uint32_le(s, monitor_layout->physical_height);
-            in_uint32_le(s, monitor_layout->orientation);
-            in_uint32_le(s, monitor_layout->desktop_scale_factor);
-            in_uint32_le(s, monitor_layout->device_scale_factor);
-
-            LOG(LOG_LEVEL_INFO, "    Flags 0x%8.8x Left %d Top %d "
-                   "Width %d Height %d PhysicalWidth %d PhysicalHeight %d "
-                   "Orientation %d DesktopScaleFactor %d DeviceScaleFactor %d",
-                   monitor_layout->flags, monitor_layout->left, monitor_layout->top,
-                   monitor_layout->width, monitor_layout->height,
-                   monitor_layout->physical_width, monitor_layout->physical_height,
-                   monitor_layout->orientation, monitor_layout->desktop_scale_factor,
-                   monitor_layout->device_scale_factor);
-
-            monitor_layout->right = monitor_layout->left + monitor_layout->width;
-            monitor_layout->bottom = monitor_layout->top + monitor_layout->height;
-            if (monitor_index == 0)
-            {
-                rect.left = monitor_layout->left;
-                rect.top = monitor_layout->top;
-                rect.right = monitor_layout->right;
-                rect.bottom = monitor_layout->bottom;
-            }
-            else
-            {
-                rect.left = MIN(monitor_layout->left, rect.left);
-                rect.top = MIN(monitor_layout->top, rect.top);
-                rect.right = MAX(rect.right, monitor_layout->right);
-                rect.bottom = MAX(rect.bottom, monitor_layout->bottom);
-            }
-
-            if (monitor_layout->is_primary)
-            {
-                got_primary = 1;
-            }
-        }
-
-        if (!got_primary)
-        {
-            /* no primary monitor was set, choose the leftmost monitor as primary */
-            for (int index = 0; index < NumMonitor; ++index)
-            {
-                if (wm->client_info->minfo[index].left != rect.left || wm->client_info->minfo[index].top != rect.top)
-                {
-                    continue;
-                }
-                wm->client_info->minfo[index].is_primary = 1;
-            }
-        }
-
-        /* set wm geometry */
-        if ((rect.right > rect.left) && (rect.bottom > rect.top))
-        {
-            wm->client_info->width = (rect.right - rect.left) + 1;
-            wm->client_info->height = (rect.bottom - rect.top) + 1;
-        }
-        /* make sure virtual desktop size is ok */
-        if (wm->client_info->width > 0x7FFE || wm->client_info->width < 0xC8 ||
-                wm->client_info->height > 0x7FFE || wm->client_info->height < 0xC8)
-        {
-            LOG(LOG_LEVEL_INFO,
-                "Client supplied virtual desktop width or height is invalid. "
-                "Allowed width range: min %d, max %d. Width received: %d. "
-                "Allowed height range: min %d, max %d. Height received: %d",
-                0xC8, 0x7FFE, wm->client_info->width,
-                0xC8, 0x7FFE, wm->client_info->height);
-            return 1; /* error */
-        }
-
-        /* keep a copy of non negative monitor info values for xrdp_wm usage */
-        for (int index = 0; index < NumMonitor; ++index)
-        {
-            wm->client_info->minfo_wm[index].left = wm->client_info->minfo[index].left - rect.left;
-            wm->client_info->minfo_wm[index].top = wm->client_info->minfo[index].top - rect.top;
-            wm->client_info->minfo_wm[index].right = wm->client_info->minfo[index].right - rect.left;
-            wm->client_info->minfo_wm[index].bottom = wm->client_info->minfo[index].bottom - rect.top;
-            wm->client_info->minfo_wm[index].is_primary = wm->client_info->minfo[index].is_primary;
-        }
-    }
-
-    session_width = rect.right - rect.left;
-    session_height = rect.bottom - rect.top;
-    if ((session_width == wm->screen->width && session_height == wm->screen->height)
-            || (session_width <= 0 || session_height <= 0)) {
-        wm->mm->resizing = 0;
         return 0;
     }
+    struct xrdp_mm_resize_description *description = (struct xrdp_mm_resize_description *)
+        g_malloc(sizeof(struct xrdp_mm_resize_description), 1);
+
+    in_uint32_le(s, MonitorLayoutSize);
+    in_uint32_le(s, NumMonitor);
+    LOG(LOG_LEVEL_DEBUG, "  MonitorLayoutSize %d NumMonitor %d",
+            MonitorLayoutSize, NumMonitor);
+
+    if (NumMonitor > XRDP_MAXIMUM_MONITORS)
+    {
+        LOG(LOG_LEVEL_ERROR,
+            "[MS-RDPBCGR] Protocol error: TS_UD_CS_MONITOR monitorCount "
+            "MUST be less than 16, received: %d", NumMonitor);
+        g_free(description);
+        return 1;
+    }
+
+    description->monitorCount = NumMonitor;
+
+    int got_primary = 0;
+
+    for (int monitor_index = 0; monitor_index < NumMonitor; ++monitor_index)
+    {
+        monitor_layout = description->minfo + monitor_index;
+        in_uint32_le(s, monitor_layout->flags);
+        in_uint32_le(s, monitor_layout->left);
+        in_uint32_le(s, monitor_layout->top);
+        in_uint32_le(s, monitor_layout->width);
+        in_uint32_le(s, monitor_layout->height);
+        in_uint32_le(s, monitor_layout->physical_width);
+        in_uint32_le(s, monitor_layout->physical_height);
+        in_uint32_le(s, monitor_layout->orientation);
+        in_uint32_le(s, monitor_layout->desktop_scale_factor);
+        in_uint32_le(s, monitor_layout->device_scale_factor);
+
+        LOG(LOG_LEVEL_INFO, "    Flags 0x%8.8x Left %d Top %d "
+                "Width %d Height %d PhysicalWidth %d PhysicalHeight %d "
+                "Orientation %d DesktopScaleFactor %d DeviceScaleFactor %d",
+                monitor_layout->flags, monitor_layout->left, monitor_layout->top,
+                monitor_layout->width, monitor_layout->height,
+                monitor_layout->physical_width, monitor_layout->physical_height,
+                monitor_layout->orientation, monitor_layout->desktop_scale_factor,
+                monitor_layout->device_scale_factor);
+
+        monitor_layout->right = monitor_layout->left + monitor_layout->width;
+        monitor_layout->bottom = monitor_layout->top + monitor_layout->height;
+        if (monitor_index == 0)
+        {
+            rect.left = monitor_layout->left;
+            rect.top = monitor_layout->top;
+            rect.right = monitor_layout->right;
+            rect.bottom = monitor_layout->bottom;
+        }
+        else
+        {
+            rect.left = MIN(monitor_layout->left, rect.left);
+            rect.top = MIN(monitor_layout->top, rect.top);
+            rect.right = MAX(rect.right, monitor_layout->right);
+            rect.bottom = MAX(rect.bottom, monitor_layout->bottom);
+        }
+
+        if (monitor_layout->is_primary)
+        {
+            got_primary = 1;
+        }
+    }
+
+    if (!got_primary)
+    {
+        /* no primary monitor was set, choose the leftmost monitor as primary */
+        for (int index = 0; index < NumMonitor; ++index)
+        {
+            if (description->minfo[index].left != rect.left || description->minfo[index].top != rect.top)
+            {
+                continue;
+            }
+            description->minfo[index].is_primary = 1;
+        }
+    }
+
+    /* set wm geometry */
+    if ((rect.right > rect.left) && (rect.bottom > rect.top))
+    {
+        description->session_width = rect.right - rect.left;
+        description->session_height = rect.bottom - rect.top;
+    }
+    /* make sure virtual desktop size is ok */
+    if (description->session_width > 0x7FFE || description->session_width < 0xC8 ||
+            description->session_height > 0x7FFE || description->session_height < 0xC8)
+    {
+        LOG(LOG_LEVEL_INFO,
+            "Client supplied virtual desktop width or height is invalid. "
+            "Allowed width range: min %d, max %d. Width received: %d. "
+            "Allowed height range: min %d, max %d. Height received: %d",
+            0xC8, 0x7FFE, wm->client_info->width,
+            0xC8, 0x7FFE, wm->client_info->height);
+        g_free(description);
+        return 1; /* error */
+    }
+
+    /* keep a copy of non negative monitor info values for xrdp_wm usage */
+    for (int index = 0; index < NumMonitor; ++index)
+    {
+        description->minfo_wm[index].left = description->minfo[index].left - rect.left;
+        description->minfo_wm[index].top = description->minfo[index].top - rect.top;
+        description->minfo_wm[index].right = description->minfo[index].right - rect.left;
+        description->minfo_wm[index].bottom = description->minfo[index].bottom - rect.top;
+        description->minfo_wm[index].is_primary = description->minfo[index].is_primary;
+    }
+
+    list_add_item(wm->mm->resize_queue, (tintptr)description);
+    return 0;
+}
+
+/******************************************************************************/
+static int
+process_dynamic_monitor_description(struct xrdp_wm *wm, struct xrdp_mm_resize_description *description) {
+    int error = 0;
     struct xrdp_mm* mm = wm->mm;
     struct xrdp_mod* module = mm->mod;
+
+    mm->resizing = 1;
 
 #ifdef XRDP_X264
     if (error == 0 && module != 0 && mm->egfx_up != 0 && mm->egfx != 0) {
@@ -1589,7 +1585,7 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
     }
 #endif
     // TODO: Unify this logic with server_reset
-    error = libxrdp_reset(wm->session, session_width, session_height, wm->screen->bpp);
+    error = libxrdp_reset(wm->session, description->session_width, description->session_height, wm->screen->bpp);
     if (error != 0)
     {
         LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: libxrdp_reset failed %d", error);
@@ -1617,7 +1613,7 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
         goto exit;
     }
     /* resize the main window */
-    error = xrdp_bitmap_resize(wm->screen, session_width, session_height);
+    error = xrdp_bitmap_resize(wm->screen, description->session_width, description->session_height);
     if (error != 0)
     {
         LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: xrdp_bitmap_resize failed %d", error);
@@ -1638,13 +1634,13 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
             LOG_DEVEL(LOG_LEVEL_INFO, "dynamic_monitor_data: mod_server_version_message failed %d", error);
             goto exit;
         }
-        error = module->mod_server_monitor_resize(module, session_width, session_height, wm->screen->bpp);
+        error = module->mod_server_monitor_resize(module, description->session_width, description->session_height, wm->screen->bpp);
         if (error != 0)
         {
             LOG_DEVEL(LOG_LEVEL_INFO, "dynamic_monitor_data: mod_server_monitor_resize failed %d", error);
             goto exit;
         }
-        error = module->mod_server_monitor_full_invalidate(module, session_width, session_height);
+        error = module->mod_server_monitor_full_invalidate(module, description->session_width, description->session_height);
         if (error != 0)
         {
             LOG_DEVEL(LOG_LEVEL_INFO, "dynamic_monitor_data: mod_server_monitor_full_invalidate failed %d", error);
@@ -1662,7 +1658,7 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
 #endif
     return 0;
 exit:
-    wm->mm->resizing = 1;
+    mm->resizing = 0;
     return error;
 }
 
@@ -3142,6 +3138,13 @@ xrdp_mm_get_wait_objs(struct xrdp_mm *self,
             }
         }
     }
+    if (self->resize_queue->count > 0 && self->resizing == 0) {
+        struct xrdp_mm_resize_description *description = (struct xrdp_mm_resize_description*)list_get_item(self->resize_queue, 0);
+        list_remove_item(self->resize_queue, 0);
+        process_dynamic_monitor_description(self->wm, description);
+        g_free(description);
+    }
+
     return rv;
 }
 
