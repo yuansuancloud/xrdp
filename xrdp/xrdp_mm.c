@@ -1438,6 +1438,14 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
         LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: Not allowing resize. Suppress output is active.");
         return 0;
     }
+    if (wm->mm->resize_queue->count > 0) {
+        struct xrdp_mm_resize_description *description = (struct xrdp_mm_resize_description *)list_get_item(wm->mm->resize_queue, 0);
+        if (description->monitorCount == 0 && description->session_height == 0 && description->session_width == 0) {
+            LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: Ignoring resize data. This is probably an erroneous message from connection startup.");
+            return 0;
+        }
+    }
+
 
     g_memset(&ls, 0, sizeof(ls));
     ls.data = data;
@@ -1579,6 +1587,10 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct xrdp_mm_resize_de
         LOG(LOG_LEVEL_INFO, "process_dynamic_monitor_description: Not allowing resize. Suppress output is active.");
         return 0;
     }
+    if (description->session_width <= 0 || description->session_height <=0) {
+        LOG(LOG_LEVEL_INFO, "process_dynamic_monitor_description: Not allowing resize due to invalid dimensions (w: %d x h: %d)", description->session_width, description->session_height);
+        return 0;
+    }
 
     mm->resizing = 1;
 
@@ -1704,6 +1716,10 @@ xrdp_mm_drdynvc_up(struct xrdp_mm *self)
     if (error != 0) {
         return error;
     }
+    struct xrdp_mm_resize_description *ignore_marker = (struct xrdp_mm_resize_description *)
+        g_malloc(sizeof(struct xrdp_mm_resize_description), 1);
+    g_memset(ignore_marker, 0, sizeof(struct xrdp_mm_resize_description));
+    list_add_item(self->resize_queue, (tintptr)ignore_marker);
     error = dynamic_monitor_initialize(self);
     return error;
 }
