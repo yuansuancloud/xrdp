@@ -1412,16 +1412,10 @@ egfx_initialize(struct xrdp_mm *self)
     return 0;
 }
 
-/******************************************************************************/
-static int
-dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
-{
-    struct stream ls;
-    struct stream *s;
-    int msg_type;
-    int msg_length;
-    struct xrdp_process *pro;
-    struct xrdp_wm *wm;
+static struct xrdp_mm_resize_description* 
+process_monitor_stream(struct stream *s) {
+    struct xrdp_mm_resize_description *description = (struct xrdp_mm_resize_description *)
+        g_malloc(sizeof(struct xrdp_mm_resize_description), 1);
 
     int MonitorLayoutSize;
     int NumMonitor;
@@ -1429,41 +1423,6 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
     struct monitor_info *monitor_layout;
 
     struct xrdp_rect rect = {8192, 8192, -8192, -8192};
-
-    LOG(LOG_LEVEL_INFO, "dynamic_monitor_data:");
-    pro = (struct xrdp_process *) id;
-    wm = pro->wm;
-
-    if (wm->client_info->suppress_output == 1) {
-        LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: Not allowing resize. Suppress output is active.");
-        return 0;
-    }
-    if (wm->mm->resize_queue->count > 0) {
-        struct xrdp_mm_resize_description *description = (struct xrdp_mm_resize_description *)list_get_item(wm->mm->resize_queue, 0);
-        if (description->monitorCount == 0 && description->session_height == 0 && description->session_width == 0) {
-            LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: Ignoring resize data. This is probably an erroneous message from connection startup.");
-            return 0;
-        }
-    }
-
-
-    g_memset(&ls, 0, sizeof(ls));
-    ls.data = data;
-    ls.p = ls.data;
-    ls.size = bytes;
-    ls.end = ls.data + bytes;
-    s = &ls;
-    in_uint32_le(s, msg_type);
-    in_uint32_le(s, msg_length);
-    LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: msg_type %d msg_length %d",
-           msg_type, msg_length);
-
-    if (msg_type != DISPLAYCONTROL_PDU_TYPE_MONITOR_LAYOUT)
-    {
-        return 0;
-    }
-    struct xrdp_mm_resize_description *description = (struct xrdp_mm_resize_description *)
-        g_malloc(sizeof(struct xrdp_mm_resize_description), 1);
 
     in_uint32_le(s, MonitorLayoutSize);
     in_uint32_le(s, NumMonitor);
@@ -1475,8 +1434,7 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
         LOG(LOG_LEVEL_ERROR,
             "[MS-RDPBCGR] Protocol error: TS_UD_CS_MONITOR monitorCount "
             "MUST be less than 16, received: %d", NumMonitor);
-        g_free(description);
-        return 1;
+        goto exit_error;
     }
 
     description->monitorCount = NumMonitor;
@@ -1485,6 +1443,11 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
 
     for (int monitor_index = 0; monitor_index < NumMonitor; ++monitor_index)
     {
+        if (!s_check_rem_and_log(s, 40, "Parsing [MS-RDPBCGR] TS_UD_CS_MONITOR.TS_MONITOR_DEF"))
+        {
+            goto exit_error;
+        }
+
         monitor_layout = description->minfo + monitor_index;
         in_uint32_le(s, monitor_layout->flags);
         in_uint32_le(s, monitor_layout->left);
@@ -1532,13 +1495,14 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
     if (!got_primary)
     {
         /* no primary monitor was set, choose the leftmost monitor as primary */
-        for (int index = 0; index < NumMonitor; ++index)
+        for (int monitor_index = 0; monitor_index < NumMonitor; ++monitor_index)
         {
-            if (description->minfo[index].left != rect.left || description->minfo[index].top != rect.top)
+            monitor_layout = description->minfo + monitor_index;
+            if (monitor_layout->left != rect.left || monitor_layout->top != rect.top)
             {
                 continue;
             }
-            description->minfo[index].is_primary = 1;
+            monitor_layout->is_primary = 1;
         }
     }
 
@@ -1556,24 +1520,77 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
             "Client supplied virtual desktop width or height is invalid. "
             "Allowed width range: min %d, max %d. Width received: %d. "
             "Allowed height range: min %d, max %d. Height received: %d",
-            0xC8, 0x7FFE, wm->client_info->width,
-            0xC8, 0x7FFE, wm->client_info->height);
-        g_free(description);
-        return 1; /* error */
+            0xC8, 0x7FFE, description->session_width,
+            0xC8, 0x7FFE, description->session_width);
+        goto exit_error;
     }
 
     /* keep a copy of non negative monitor info values for xrdp_wm usage */
-    for (int index = 0; index < NumMonitor; ++index)
+    for (int monitor_index = 0; monitor_index < NumMonitor; ++monitor_index)
     {
-        description->minfo_wm[index].left = description->minfo[index].left - rect.left;
-        description->minfo_wm[index].top = description->minfo[index].top - rect.top;
-        description->minfo_wm[index].right = description->minfo[index].right - rect.left;
-        description->minfo_wm[index].bottom = description->minfo[index].bottom - rect.top;
-        description->minfo_wm[index].is_primary = description->minfo[index].is_primary;
+        monitor_layout = description->minfo_wm + monitor_index;
+
+        g_memcpy(monitor_layout, description->minfo + monitor_index, sizeof(struct monitor_info));
+
+        monitor_layout->left = monitor_layout->left - rect.left;
+        monitor_layout->top = monitor_layout->top - rect.top;
+        monitor_layout->right = monitor_layout->right - rect.left;
+        monitor_layout->bottom = monitor_layout->bottom - rect.top;
+    }
+    return description;
+exit_error:
+    g_free(description);
+    return NULL;
+}
+
+/******************************************************************************/
+static int
+dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
+{
+    int error = 0;
+    struct stream ls;
+    struct stream *s;
+    int msg_type;
+    int msg_length;
+    struct xrdp_process *pro;
+    struct xrdp_wm *wm;
+
+    LOG(LOG_LEVEL_INFO, "dynamic_monitor_data:");
+    pro = (struct xrdp_process *) id;
+    wm = pro->wm;
+
+    if (wm->client_info->suppress_output == 1) {
+        LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: Not allowing resize. Suppress output is active.");
+        return error;
+    }
+    if (wm->mm->resize_queue->count > 0) {
+        struct xrdp_mm_resize_description *description = (struct xrdp_mm_resize_description *)list_get_item(wm->mm->resize_queue, 0);
+        if (description->monitorCount == 0 && description->session_height == 0 && description->session_width == 0) {
+            LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: Ignoring resize data. This is probably an erroneous message from connection startup.");
+            return error;
+        }
     }
 
+    g_memset(&ls, 0, sizeof(ls));
+    ls.data = data;
+    ls.p = ls.data;
+    ls.size = bytes;
+    ls.end = ls.data + bytes;
+    s = &ls;
+    in_uint32_le(s, msg_type);
+    in_uint32_le(s, msg_length);
+    LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: msg_type %d msg_length %d",
+           msg_type, msg_length);
+
+    if (msg_type != DISPLAYCONTROL_PDU_TYPE_MONITOR_LAYOUT)
+    {
+        return error;
+    }
+    
+    struct xrdp_mm_resize_description *description = process_monitor_stream(s);
+
     list_add_item(wm->mm->resize_queue, (tintptr)description);
-    return 0;
+    return error;
 }
 
 /******************************************************************************/
