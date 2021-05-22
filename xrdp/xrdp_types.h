@@ -284,15 +284,6 @@ struct xrdp_cache
 /* defined later */
 struct xrdp_enc_data;
 
-struct xrdp_mm_resize_description
-{
-    int monitorCount; /* number of monitors detected (max = 16) */
-    struct monitor_info minfo[XRDP_MAXIMUM_MONITORS]; /* client monitor data */
-    struct monitor_info minfo_wm[XRDP_MAXIMUM_MONITORS]; /* client monitor data, non-negative values */
-    int session_width;
-    int session_height;
-};
-
 struct xrdp_mm
 {
     struct xrdp_wm *wm; /* owner */

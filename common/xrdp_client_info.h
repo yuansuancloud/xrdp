@@ -46,6 +46,15 @@ struct monitor_info
     int flags;
 };
 
+struct display_size_description
+{
+    int monitorCount; /* number of monitors detected (max = 16) */
+    struct monitor_info minfo[XRDP_MAXIMUM_MONITORS]; /* client monitor data */
+    struct monitor_info minfo_wm[XRDP_MAXIMUM_MONITORS]; /* client monitor data, non-negative values */
+    int session_width;
+    int session_height;
+};
+
 /**
  * Information about the xrdp client
  *
