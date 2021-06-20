@@ -134,6 +134,14 @@ AC_ARG_ENABLE(pixman, AS_HELP_STRING([--enable-pixman],
               [Use pixman library (default: no)]),
               [], [enable_pixman=no])
 AM_CONDITIONAL(XRDP_PIXMAN, [test x$enable_pixman = xyes])
+
+#example XRDP_NVENC_CFLAGS="-I/usr/local/cuda-11.3/include -I$HOME/Video_Codec_SDK_11.0.10/Interface" XRDP_NVENC_LIBS="-lcuda -lnvidia-encode" ./configure --enable-nvenc
+AC_ARG_ENABLE(nvenc, AS_HELP_STRING([--enable-nvenc],
+              [Use nvenc library (default: no), env vars XRDP_NVENC_CFLAGS and
+               XRDP_NVENC_LIBS should be set if used]),
+              [], [enable_nvenc=no])
+AM_CONDITIONAL(XRDP_NVENC, [test x$enable_nvenc = xyes])
+
 AC_ARG_ENABLE(x264, AS_HELP_STRING([--enable-x264],
               [Use x264 library (default: no)]),
               [], [enable_x264=no])
@@ -287,6 +295,18 @@ AS_IF( [test "x$enable_pixman" = "xyes"] , [PKG_CHECK_MODULES(PIXMAN, pixman-1 >
 
 AS_IF( [test "x$enable_x264" = "xyes"] , [PKG_CHECK_MODULES(XRDP_X264, x264 >= 0.3.0)] )
 
+if test "x$enable_nvenc" = "xyes"
+then
+if test ! -z "$XRDP_NVENC_CFLAGS"
+then
+  AC_SUBST(XRDP_NVENC_CFLAGS, ["$XRDP_NVENC_CFLAGS"])
+fi
+if test ! -z "$XRDP_NVENC_LIBS"
+then
+  AC_SUBST(XRDP_NVENC_LIBS, ["$XRDP_NVENC_LIBS"])
+fi
+fi
+
 # checking for TurboJPEG
 if test "x$enable_tjpeg" = "xyes"
 then
@@ -395,6 +415,7 @@ echo "  fdkaac          $enable_fdkaac"
 echo "  jpeg            $enable_jpeg"
 echo "  turbo jpeg      $enable_tjpeg"
 echo "  rfxcodec        $enable_rfxcodec"
+echo "  nvenc           $enable_nvenc"
 echo "  x264            $enable_x264"
 echo "  painter         $enable_painter"
 echo "  pixman          $enable_pixman"

@@ -32,6 +32,10 @@
 #include "rfxcodec_encode.h"
 #endif
 
+#ifdef XRDP_NVENC
+#include "xrdp_encoder_nvenc.h"
+#endif
+
 #ifdef XRDP_X264
 #include "xrdp_encoder_x264.h"
 #endif
@@ -108,7 +112,9 @@ xrdp_encoder_create(struct xrdp_mm *mm)
             (12 << 24) | (66 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
         self->gfx = 1;
-#ifdef XRDP_X264
+#if defined(XRDP_NVENC)
+        self->codec_handle = xrdp_encoder_nvenc_create();
+#elif defined(XRDP_X264)
         self->codec_handle = xrdp_encoder_x264_create();
 #endif
     }
@@ -164,7 +170,9 @@ xrdp_encoder_create(struct xrdp_mm *mm)
             /* XRDP_nv12 */
             (12 << 24) | (64 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
-#ifdef XRDP_X264
+#if defined(XRDP_NVENC)
+        self->codec_handle = xrdp_encoder_nvenc_create();
+#elif defined(XRDP_X264)
         self->codec_handle = xrdp_encoder_x264_create();
 #endif
     }
@@ -238,10 +246,14 @@ xrdp_encoder_delete(struct xrdp_encoder *self)
         rfxcodec_encode_destroy(self->codec_handle);
     }
 #endif
-#ifdef XRDP_X264
+#if defined(XRDP_NVENC) || defined(XRDP_X264)
     else if (self->process_enc == process_enc_h264)
     {
+#if defined(XRDP_NVENC)
+        xrdp_encoder_nvenc_delete(self->codec_handle);
+#elif defined(XRDP_X264)
         xrdp_encoder_x264_delete(self->codec_handle);
+#endif
     }
 #endif
     /* destroy wait objects used for signalling */
@@ -547,7 +559,7 @@ static int n_save_data(const char* data, int data_size, int width, int height)
 }
 #endif
 
-#if defined(XRDP_X264)
+#if defined(XRDP_NVENC) || defined(XRDP_X264)
 
 /*****************************************************************************/
 /* called from encoder thread */
@@ -650,14 +662,17 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
         comp_bytes_pre = 4 + 4 + 2 + 2 + 2 + 2 + 2 + rcount * 8 + 4;
         enc_done_flags = 0;
     }
-
-#if defined(XRDP_X264)
+#if defined(XRDP_NVENC)
+    error = xrdp_encoder_nvenc_encode(self->codec_handle, 0,
+                                      enc->width, enc->height, 0,
+                                      enc->data,
+                                      s->p, &out_data_bytes);
+#elif defined(XRDP_X264)
     error = xrdp_encoder_x264_encode(self->codec_handle, 0,
                                      enc->width, enc->height, 0,
                                      enc->data,
                                      s->p, &out_data_bytes);
 #endif
-
     LLOGLN(10, ("process_enc_h264: xrdp_encoder_x264_encode rv %d "
            "out_data_bytes %d width %d height %d",
            error, out_data_bytes, enc->width, enc->height));
@@ -712,7 +727,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
 static int
 process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
 {
-    LLOGLN(0, ("process_enc_x264:"));
+    LLOGLN(0, ("process_enc_h264:"));
     return 0;
 }
 
