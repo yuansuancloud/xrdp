@@ -1108,7 +1108,7 @@ xrdp_mm_egfx_send_planar_bitmap(struct xrdp_mm *self,
                 gfx_rect.y1 = yindex;
                 gfx_rect.x2 = xindex + bwidth;
                 gfx_rect.y2 = yindex + bheight;
-                if (xrdp_egfx_send_wire_to_surface1(self->egfx, self->egfx->channel_id,
+                if (xrdp_egfx_send_wire_to_surface1(self->egfx, self->egfx->surface_id,
                                                     XR_RDPGFX_CODECID_PLANAR,
                                                     XR_PIXEL_FORMAT_XRGB_8888,
                                                     &gfx_rect, comp_s->data,
@@ -1228,10 +1228,10 @@ xrdp_mm_egfx_caps_advertise(void* user, int caps_count,
                    "error %d monitorCount %d",
                    error, self->wm->client_info->monitorCount));
         self->egfx_up = 1;
-        xrdp_egfx_send_create_surface(self->egfx, self->egfx->channel_id,
+        xrdp_egfx_send_create_surface(self->egfx, self->egfx->surface_id,
                                       screen->width, screen->height,
                                       XR_PIXEL_FORMAT_XRGB_8888);
-        xrdp_egfx_send_map_surface(self->egfx, self->egfx->channel_id, 0, 0);
+        xrdp_egfx_send_map_surface(self->egfx, self->egfx->surface_id, 0, 0);
         xr_rect.left = 0;
         xr_rect.top = 0;
         xr_rect.right = screen->width;
@@ -2922,7 +2922,7 @@ xrdp_mm_process_enc_done(struct xrdp_mm *self)
                 rect.y1 = y;
                 rect.x2 = x + cx;
                 rect.y2 = y + cy;
-                xrdp_egfx_send_wire_to_surface1(self->egfx, self->egfx->channel_id,
+                xrdp_egfx_send_wire_to_surface1(self->egfx, self->egfx->surface_id,
                                                 XR_RDPGFX_CODECID_AVC420,
                                                 XR_PIXEL_FORMAT_XRGB_8888,
                                                 &rect,
@@ -2935,7 +2935,7 @@ xrdp_mm_process_enc_done(struct xrdp_mm *self)
             {
                 xrdp_egfx_send_frame_start(self->egfx,
                                            enc_done->enc->frame_id, 0);
-                xrdp_egfx_send_wire_to_surface2(self->egfx, self->egfx->channel_id, 9, 1,
+                xrdp_egfx_send_wire_to_surface2(self->egfx, self->egfx->surface_id, 9, 1,
                                                 XR_PIXEL_FORMAT_XRGB_8888,
                                                 enc_done->comp_pad_data +
                                                     enc_done->pad_bytes,
