@@ -1490,7 +1490,7 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct display_size_desc
 
     mm->resizing = 1;
 
-#ifdef XRDP_X264
+#if defined(XRDP_X264) || defined(XRDP_NVENC)
     if (error == 0 && module != 0 && mm->egfx_up != 0 && mm->egfx != 0) {
         xrdp_egfx_delete(wm->mm->egfx);
         mm->egfx = NULL;
@@ -1561,7 +1561,7 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct display_size_desc
         }
     }
 
-#ifdef XRDP_X264
+#if defined(XRDP_X264) || defined(XRDP_NVENC)
     if (error == 0 && mm->egfx == NULL && mm->egfx_up == 0) {
         //Disable the encoder until the resize is complete. Ack all frames to prevent an infinite loop.
         xrdp_encoder_delete(mm->encoder);
