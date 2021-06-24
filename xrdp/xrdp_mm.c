@@ -1618,8 +1618,8 @@ xrdp_mm_drdynvc_up(struct xrdp_mm *self)
         return error;
     }
     struct display_size_description*ignore_marker = (struct display_size_description*)
-        g_malloc(sizeof(struct xrdp_mm_resize_description), 1);
-    g_memset(ignore_marker, 0, sizeof(struct xrdp_mm_resize_description));
+        g_malloc(sizeof(struct display_size_description), 1);
+    g_memset(ignore_marker, 0, sizeof(struct display_size_description));
     list_add_item(self->resize_queue, (tintptr)ignore_marker);
     error = dynamic_monitor_initialize(self);
     return error;
@@ -3383,7 +3383,7 @@ xrdp_mm_check_wait_objs(struct xrdp_mm *self)
         else if (self->resize_queue->count > 0 && self->resizing == 0 && self->mod != 0)
 #endif
         {
-            struct display_size_description*description = (struct xrdp_mm_resize_description*)list_get_item(self->resize_queue, 0);
+            struct display_size_description*description = (struct display_size_description*)list_get_item(self->resize_queue, 0);
             list_remove_item(self->resize_queue, 0);
             LOG(LOG_LEVEL_INFO, "xrdp_mm_get_wait_objs: Processing resize to: %d x %d", description->session_width, description->session_height);
             process_dynamic_monitor_description(self->wm, description);
