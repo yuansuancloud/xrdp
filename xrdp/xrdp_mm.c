@@ -1230,7 +1230,7 @@ xrdp_mm_egfx_caps_advertise(void* user, int caps_count,
     }
     if (best_h264_index >= 0) /* prefer h264, todo use setting in xrdp.ini for this */
     {
-#ifdef XRDP_X264
+#if defined(XRDP_X264) || defined(XRDP_NVENC)
         best_index = best_h264_index;
         self->egfx_flags = 1;
 #endif
@@ -1412,21 +1412,23 @@ egfx_initialize(struct xrdp_mm *self)
     return 0;
 }
 
-struct display_size_description*
-process_monitor_stream(struct stream *s, int full_parameters);
-
 /******************************************************************************/
 static int
 dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
 {
-    int error = 0;
     struct stream ls;
     struct stream *s;
     int msg_type;
     int msg_length;
     struct xrdp_process *pro;
     struct xrdp_wm *wm;
+
     int MonitorLayoutSize;
+    int NumMonitor;
+
+    struct monitor_info *monitor_layout;
+
+    struct xrdp_rect rect = {8192, 8192, -8192, -8192};
 
     LOG(LOG_LEVEL_INFO, "dynamic_monitor_data:");
     pro = (struct xrdp_process *) id;
@@ -1434,15 +1436,16 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
 
     if (wm->client_info->suppress_output == 1) {
         LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: Not allowing resize. Suppress output is active.");
-        return error;
+        return 0;
     }
     if (wm->mm->resize_queue->count > 0) {
-        struct display_size_description *description = (struct display_size_description *)list_get_item(wm->mm->resize_queue, 0);
+        struct xrdp_mm_resize_description *description = (struct xrdp_mm_resize_description *)list_get_item(wm->mm->resize_queue, 0);
         if (description->monitorCount == 0 && description->session_height == 0 && description->session_width == 0) {
             LOG(LOG_LEVEL_INFO, "dynamic_monitor_data: Ignoring resize data. This is probably an erroneous message from connection startup.");
-            return error;
+            return 0;
         }
     }
+
 
     g_memset(&ls, 0, sizeof(ls));
     ls.data = data;
@@ -1459,22 +1462,123 @@ dynamic_monitor_data(intptr_t id, int chan_id, char *data, int bytes)
     {
         return 0;
     }
-    
+    struct xrdp_mm_resize_description *description = (struct xrdp_mm_resize_description *)
+        g_malloc(sizeof(struct xrdp_mm_resize_description), 1);
+
     in_uint32_le(s, MonitorLayoutSize);
-    if (MonitorLayoutSize != 40)
+    in_uint32_le(s, NumMonitor);
+    LOG(LOG_LEVEL_DEBUG, "  MonitorLayoutSize %d NumMonitor %d",
+            MonitorLayoutSize, NumMonitor);
+
+    if (NumMonitor > XRDP_MAXIMUM_MONITORS)
     {
-        /* 2.2.2.2 DISPLAYCONTROL_MONITOR_LAYOUT_PDU */
-        LOG(LOG_LEVEL_ERROR, "dynamic_monitor_data: MonitorLayoutSize is %d. Per spec it must be 40.", MonitorLayoutSize);
+        LOG(LOG_LEVEL_ERROR,
+            "[MS-RDPBCGR] Protocol error: TS_UD_CS_MONITOR monitorCount "
+            "MUST be less than 16, received: %d", NumMonitor);
+        g_free(description);
         return 1;
     }
-    struct display_size_description *description = process_monitor_stream(s, 1);
+
+    description->monitorCount = NumMonitor;
+
+    int got_primary = 0;
+
+    for (int monitor_index = 0; monitor_index < NumMonitor; ++monitor_index)
+    {
+        monitor_layout = description->minfo + monitor_index;
+        in_uint32_le(s, monitor_layout->flags);
+        in_uint32_le(s, monitor_layout->left);
+        in_uint32_le(s, monitor_layout->top);
+        in_uint32_le(s, monitor_layout->width);
+        in_uint32_le(s, monitor_layout->height);
+        in_uint32_le(s, monitor_layout->physical_width);
+        in_uint32_le(s, monitor_layout->physical_height);
+        in_uint32_le(s, monitor_layout->orientation);
+        in_uint32_le(s, monitor_layout->desktop_scale_factor);
+        in_uint32_le(s, monitor_layout->device_scale_factor);
+
+        LOG(LOG_LEVEL_INFO, "    Flags 0x%8.8x Left %d Top %d "
+                "Width %d Height %d PhysicalWidth %d PhysicalHeight %d "
+                "Orientation %d DesktopScaleFactor %d DeviceScaleFactor %d",
+                monitor_layout->flags, monitor_layout->left, monitor_layout->top,
+                monitor_layout->width, monitor_layout->height,
+                monitor_layout->physical_width, monitor_layout->physical_height,
+                monitor_layout->orientation, monitor_layout->desktop_scale_factor,
+                monitor_layout->device_scale_factor);
+
+        monitor_layout->right = monitor_layout->left + monitor_layout->width;
+        monitor_layout->bottom = monitor_layout->top + monitor_layout->height;
+        if (monitor_index == 0)
+        {
+            rect.left = monitor_layout->left;
+            rect.top = monitor_layout->top;
+            rect.right = monitor_layout->right;
+            rect.bottom = monitor_layout->bottom;
+        }
+        else
+        {
+            rect.left = MIN(monitor_layout->left, rect.left);
+            rect.top = MIN(monitor_layout->top, rect.top);
+            rect.right = MAX(rect.right, monitor_layout->right);
+            rect.bottom = MAX(rect.bottom, monitor_layout->bottom);
+        }
+
+        if (monitor_layout->is_primary)
+        {
+            got_primary = 1;
+        }
+    }
+
+    if (!got_primary)
+    {
+        /* no primary monitor was set, choose the leftmost monitor as primary */
+        for (int index = 0; index < NumMonitor; ++index)
+        {
+            if (description->minfo[index].left != rect.left || description->minfo[index].top != rect.top)
+            {
+                continue;
+            }
+            description->minfo[index].is_primary = 1;
+        }
+    }
+
+    /* set wm geometry */
+    if ((rect.right > rect.left) && (rect.bottom > rect.top))
+    {
+        description->session_width = rect.right - rect.left;
+        description->session_height = rect.bottom - rect.top;
+    }
+    /* make sure virtual desktop size is ok */
+    if (description->session_width > 0x7FFE || description->session_width < 0xC8 ||
+            description->session_height > 0x7FFE || description->session_height < 0xC8)
+    {
+        LOG(LOG_LEVEL_INFO,
+            "Client supplied virtual desktop width or height is invalid. "
+            "Allowed width range: min %d, max %d. Width received: %d. "
+            "Allowed height range: min %d, max %d. Height received: %d",
+            0xC8, 0x7FFE, wm->client_info->width,
+            0xC8, 0x7FFE, wm->client_info->height);
+        g_free(description);
+        return 1; /* error */
+    }
+
+    /* keep a copy of non negative monitor info values for xrdp_wm usage */
+    for (int index = 0; index < NumMonitor; ++index)
+    {
+        description->minfo_wm[index].left = description->minfo[index].left - rect.left;
+        description->minfo_wm[index].top = description->minfo[index].top - rect.top;
+        description->minfo_wm[index].right = description->minfo[index].right - rect.left;
+        description->minfo_wm[index].bottom = description->minfo[index].bottom - rect.top;
+        description->minfo_wm[index].is_primary = description->minfo[index].is_primary;
+    }
+
     list_add_item(wm->mm->resize_queue, (tintptr)description);
     return 0;
 }
 
 /******************************************************************************/
 static int
-process_dynamic_monitor_description(struct xrdp_wm *wm, struct display_size_description *description) {
+process_dynamic_monitor_description(struct xrdp_wm *wm, struct xrdp_mm_resize_description *description) {
     int error = 0;
     struct xrdp_mm* mm = wm->mm;
     struct xrdp_mod* module = mm->mod;
@@ -1490,7 +1594,7 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct display_size_desc
 
     mm->resizing = 1;
 
-#ifdef XRDP_X264
+#if defined(XRDP_X264) || defined(XRDP_NVENC)
     if (error == 0 && module != 0 && mm->egfx_up != 0 && mm->egfx != 0) {
         xrdp_egfx_delete(wm->mm->egfx);
         mm->egfx = NULL;
@@ -1561,7 +1665,7 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct display_size_desc
         }
     }
 
-#ifdef XRDP_X264
+#if defined(XRDP_X264) || defined(XRDP_NVENC)
     if (error == 0 && mm->egfx == NULL && mm->egfx_up == 0) {
         //Disable the encoder until the resize is complete. Ack all frames to prevent an infinite loop.
         xrdp_encoder_delete(mm->encoder);
@@ -1569,11 +1673,6 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct display_size_desc
         egfx_initialize(mm);
     }
 #endif
-    wm->client_info->monitorCount = description->monitorCount;
-    wm->client_info->width = description->session_width;
-    wm->client_info->height = description->session_height;
-    g_memcpy(wm->client_info->minfo, description->minfo, sizeof(struct monitor_info) * XRDP_MAXIMUM_MONITORS);
-    g_memcpy(wm->client_info->minfo_wm, description->minfo_wm, sizeof(struct monitor_info) * XRDP_MAXIMUM_MONITORS);
     return 0;
 exit:
     mm->resizing = 0;
@@ -1617,9 +1716,9 @@ xrdp_mm_drdynvc_up(struct xrdp_mm *self)
     if (error != 0) {
         return error;
     }
-    struct display_size_description *ignore_marker = (struct display_size_description *)
-        g_malloc(sizeof(struct display_size_description), 1);
-    g_memset(ignore_marker, 0, sizeof(struct display_size_description));
+    struct xrdp_mm_resize_description *ignore_marker = (struct xrdp_mm_resize_description *)
+        g_malloc(sizeof(struct xrdp_mm_resize_description), 1);
+    g_memset(ignore_marker, 0, sizeof(struct xrdp_mm_resize_description));
     list_add_item(self->resize_queue, (tintptr)ignore_marker);
     error = dynamic_monitor_initialize(self);
     return error;
@@ -3377,13 +3476,13 @@ xrdp_mm_check_wait_objs(struct xrdp_mm *self)
                 }
             }
         }
-#ifdef XRDP_X264
+#if defined(XRDP_X264) || defined (XRDP_NVENC)
         else if (self->resize_queue->count > 0 && self->resizing == 0 && self->mod != 0 && self->encoder != 0 && self->egfx_up == 1)
 #else
         else if (self->resize_queue->count > 0 && self->resizing == 0 && self->mod != 0)
 #endif
         {
-            struct display_size_description *description = (struct display_size_description*)list_get_item(self->resize_queue, 0);
+            struct xrdp_mm_resize_description *description = (struct xrdp_mm_resize_description*)list_get_item(self->resize_queue, 0);
             list_remove_item(self->resize_queue, 0);
             LOG(LOG_LEVEL_INFO, "xrdp_mm_get_wait_objs: Processing resize to: %d x %d", description->session_width, description->session_height);
             process_dynamic_monitor_description(self->wm, description);
