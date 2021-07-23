@@ -662,6 +662,10 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
         comp_bytes_pre = 4 + 4 + 2 + 2 + 2 + 2 + 2 + rcount * 8 + 4;
         enc_done_flags = 0;
     }
+    out_data_bytes = ((int *) (enc->data))[0];
+    g_memcpy(s->p, enc->data + 4, out_data_bytes);
+    error = 0;
+#if 0
 #if defined(XRDP_NVENC)
     error = xrdp_encoder_nvenc_encode(self->codec_handle, 0,
                                       enc->width, enc->height, 0,
@@ -672,6 +676,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
                                      enc->width, enc->height, 0,
                                      enc->data,
                                      s->p, &out_data_bytes);
+#endif
 #endif
     LLOGLN(10, ("process_enc_h264: xrdp_encoder_x264_encode rv %d "
            "out_data_bytes %d width %d height %d",
@@ -727,7 +732,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
 static int
 process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
 {
-    LLOGLN(0, ("process_enc_h264:"));
+    LLOGLN(0, ("process_enc_h264: dummy func"));
     return 0;
 }
 
