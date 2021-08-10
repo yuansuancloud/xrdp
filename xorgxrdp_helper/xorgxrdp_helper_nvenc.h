@@ -8,7 +8,7 @@ int
 xorgxrdp_helper_nvenc_init(void);
 int
 xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
-                                     struct enc_info **ei);
+                                     int tex_format, struct enc_info **ei);
 int
 xorgxrdp_helper_nvenc_delete_encoder(struct enc_info *ei);
 int

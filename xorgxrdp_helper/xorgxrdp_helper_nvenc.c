@@ -9,7 +9,7 @@
 
 #include <epoxy/gl.h>
 
-#include <nvEncodeAPI.h>
+#include "nvEncodeAPI.h"
 
 #include "arch.h"
 #include "os_calls.h"
@@ -17,7 +17,18 @@
 #include "xorgxrdp_helper_x11.h"
 #include "xorgxrdp_helper_nvenc.h"
 
+typedef NVENCSTATUS
+    (NVENCAPI * NvEncodeAPICreateInstanceProc)
+    (NV_ENCODE_API_FUNCTION_LIST *functionList);
+
+static char g_lib_name[] = "libnvidia-encode.so";
+static char g_func_name[] = "NvEncodeAPICreateInstance";
+
+static NvEncodeAPICreateInstanceProc g_NvEncodeAPICreateInstance = NULL;
+
 static NV_ENCODE_API_FUNCTION_LIST g_enc_funcs;
+
+static long g_lib = 0;
 
 struct enc_info
 {
@@ -38,17 +49,31 @@ xorgxrdp_helper_nvenc_init(void)
 {
     NVENCSTATUS nv_error;
 
+    g_lib = g_load_library(g_lib_name);
+    if (g_lib == 0)
+    {
+        return 1;
+    }
+    g_NvEncodeAPICreateInstance = g_get_proc_address(g_lib, g_func_name);
+    if (g_NvEncodeAPICreateInstance == NULL)
+    {
+        return 1;
+    }
     g_memset(&g_enc_funcs, 0, sizeof(g_enc_funcs));
     g_enc_funcs.version = NV_ENCODE_API_FUNCTION_LIST_VER;
-    nv_error = NvEncodeAPICreateInstance(&g_enc_funcs);
+    nv_error = g_NvEncodeAPICreateInstance(&g_enc_funcs);
     g_writeln("NvEncodeAPICreateInstance %d", nv_error);
+    if (nv_error != NV_ENC_SUCCESS)
+    {
+        return 1;
+    }
     return 0;
 }
 
 /*****************************************************************************/
 int
 xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
-                                     struct enc_info **ei)
+                                     int tex_format, struct enc_info **ei)
 {
     NV_ENC_CREATE_BITSTREAM_BUFFER bitstreamParams;
     NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS params;
@@ -61,6 +86,10 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
     struct enc_info *lei;
 
     lei = g_new0(struct enc_info, 1);
+    if (lei == NULL)
+    {
+        return 1;
+    }
 
     g_memset(&params, 0, sizeof(params));
     params.version = NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER;
@@ -68,6 +97,10 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
     params.apiVersion = NVENCAPI_VERSION;
     nv_error = g_enc_funcs.nvEncOpenEncodeSessionEx(&params, &(lei->enc));
     g_writeln("nvEncOpenEncodeSessionEx %d enc %p", nv_error, lei->enc);
+    if (nv_error != NV_ENC_SUCCESS)
+    {
+        return 1;
+    }
 
     g_memset(&encCfg, 0, sizeof(encCfg));
     encCfg.version = NV_ENC_CONFIG_VER;
@@ -97,6 +130,10 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
     createEncodeParams.encodeConfig = &encCfg;
     nv_error = g_enc_funcs.nvEncInitializeEncoder(lei->enc, &createEncodeParams);
     g_writeln("nvEncInitializeEncoder %d", nv_error);
+    if (nv_error != NV_ENC_SUCCESS)
+    {
+        return 1;
+    }
 
     g_memset(&res, 0, sizeof(res));
     res.texture = tex;
@@ -107,23 +144,43 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
     reg_res.resourceType = NV_ENC_INPUT_RESOURCE_TYPE_OPENGL_TEX;
     reg_res.width = width;
     reg_res.height = height;
-    reg_res.pitch = width * 4;
+    if (tex_format == XH_YUV420)
+    {
+        reg_res.pitch = width;
+        reg_res.bufferFormat = NV_ENC_BUFFER_FORMAT_NV12;
+    }
+    else
+    {
+        reg_res.pitch = width * 4;
+        reg_res.bufferFormat = NV_ENC_BUFFER_FORMAT_AYUV;
+    }
     reg_res.resourceToRegister = &res;
-    reg_res.bufferFormat = NV_ENC_BUFFER_FORMAT_AYUV;
     reg_res.bufferUsage = NV_ENC_INPUT_IMAGE;
     nv_error = g_enc_funcs.nvEncRegisterResource(lei->enc, &reg_res);
     g_writeln("nvEncRegisterResource %d", nv_error);
+    if (nv_error != NV_ENC_SUCCESS)
+    {
+        return 1;
+    }
 
     g_memset(&mapInputResource, 0, sizeof(mapInputResource));
     mapInputResource.version = NV_ENC_LOCK_INPUT_BUFFER_VER;
     mapInputResource.registeredResource = reg_res.registeredResource;
     nv_error = g_enc_funcs.nvEncMapInputResource(lei->enc, &mapInputResource);
     g_writeln("nvEncMapInputResource %d", nv_error);
+    if (nv_error != NV_ENC_SUCCESS)
+    {
+        return 1;
+    }
 
     g_memset(&bitstreamParams, 0, sizeof(bitstreamParams));
     bitstreamParams.version = NV_ENC_CREATE_BITSTREAM_BUFFER_VER;
     nv_error = g_enc_funcs.nvEncCreateBitstreamBuffer(lei->enc, &bitstreamParams);
     g_writeln("nvEncCreateBitstreamBuffer %d", nv_error);
+    if (nv_error != NV_ENC_SUCCESS)
+    {
+        return 1;
+    }
 
     lei->bitstreamBuffer = bitstreamParams.bitstreamBuffer;
     lei->mappedResource = mapInputResource.mappedResource;
