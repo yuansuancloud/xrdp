@@ -16,6 +16,7 @@
 #include "xorgxrdp_helper.h"
 #include "xorgxrdp_helper_x11.h"
 #include "xorgxrdp_helper_nvenc.h"
+#include "log.h"
 
 typedef NVENCSTATUS
     (NVENCAPI * NvEncodeAPICreateInstanceProc)
@@ -62,7 +63,8 @@ xorgxrdp_helper_nvenc_init(void)
     g_memset(&g_enc_funcs, 0, sizeof(g_enc_funcs));
     g_enc_funcs.version = NV_ENCODE_API_FUNCTION_LIST_VER;
     nv_error = g_NvEncodeAPICreateInstance(&g_enc_funcs);
-    g_writeln("NvEncodeAPICreateInstance %d", nv_error);
+    LOGLN((LOG_LEVEL_INFO, LOGS "NvEncodeAPICreateInstance rv %d",
+           LOGP, nv_error));
     if (nv_error != NV_ENC_SUCCESS)
     {
         return 1;
@@ -96,7 +98,8 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
     params.deviceType = NV_ENC_DEVICE_TYPE_OPENGL;
     params.apiVersion = NVENCAPI_VERSION;
     nv_error = g_enc_funcs.nvEncOpenEncodeSessionEx(&params, &(lei->enc));
-    g_writeln("nvEncOpenEncodeSessionEx %d enc %p", nv_error, lei->enc);
+    LOGLN((LOG_LEVEL_INFO, LOGS "nvEncOpenEncodeSessionEx rv %d enc %p",
+           LOGP, nv_error, lei->enc));
     if (nv_error != NV_ENC_SUCCESS)
     {
         return 1;
@@ -128,8 +131,10 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
     createEncodeParams.frameRateDen = 1;
     createEncodeParams.enablePTD = 1;
     createEncodeParams.encodeConfig = &encCfg;
-    nv_error = g_enc_funcs.nvEncInitializeEncoder(lei->enc, &createEncodeParams);
-    g_writeln("nvEncInitializeEncoder %d", nv_error);
+    nv_error = g_enc_funcs.nvEncInitializeEncoder(lei->enc,
+                                                  &createEncodeParams);
+    LOGLN((LOG_LEVEL_INFO, LOGS "nvEncInitializeEncoder rv %d",
+           LOGP, nv_error));
     if (nv_error != NV_ENC_SUCCESS)
     {
         return 1;
@@ -157,7 +162,8 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
     reg_res.resourceToRegister = &res;
     reg_res.bufferUsage = NV_ENC_INPUT_IMAGE;
     nv_error = g_enc_funcs.nvEncRegisterResource(lei->enc, &reg_res);
-    g_writeln("nvEncRegisterResource %d", nv_error);
+    LOGLN((LOG_LEVEL_INFO, LOGS "nvEncRegisterResource rv %d",
+           LOGP, nv_error));
     if (nv_error != NV_ENC_SUCCESS)
     {
         return 1;
@@ -167,7 +173,8 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
     mapInputResource.version = NV_ENC_LOCK_INPUT_BUFFER_VER;
     mapInputResource.registeredResource = reg_res.registeredResource;
     nv_error = g_enc_funcs.nvEncMapInputResource(lei->enc, &mapInputResource);
-    g_writeln("nvEncMapInputResource %d", nv_error);
+    LOGLN((LOG_LEVEL_INFO, LOGS "nvEncMapInputResource rv %d",
+           LOGP, nv_error));
     if (nv_error != NV_ENC_SUCCESS)
     {
         return 1;
@@ -175,8 +182,10 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
 
     g_memset(&bitstreamParams, 0, sizeof(bitstreamParams));
     bitstreamParams.version = NV_ENC_CREATE_BITSTREAM_BUFFER_VER;
-    nv_error = g_enc_funcs.nvEncCreateBitstreamBuffer(lei->enc, &bitstreamParams);
-    g_writeln("nvEncCreateBitstreamBuffer %d", nv_error);
+    nv_error = g_enc_funcs.nvEncCreateBitstreamBuffer(lei->enc,
+                                                      &bitstreamParams);
+    LOGLN((LOG_LEVEL_INFO, LOGS "nvEncCreateBitstreamBuffer rv %d",
+           LOGP, nv_error));
     if (nv_error != NV_ENC_SUCCESS)
     {
         return 1;

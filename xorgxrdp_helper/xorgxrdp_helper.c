@@ -19,6 +19,8 @@
 #define XORGXRDP_SOURCE_XORG    1
 #define XORGXRDP_SOURCE_XRDP    2
 
+#define ARRAYSIZE(x) (sizeof(x)/sizeof(*(x)))
+
 struct xorgxrdp_info
 {
     struct trans *xorg_trans;
@@ -29,6 +31,7 @@ struct xorgxrdp_info
 static int g_shmem_id_mapped = 0;
 static int g_shmem_id = 0;
 static void *g_shmem_pixels = 0;
+static int g_display_num = 0;
 
 /*****************************************************************************/
 static int
@@ -61,8 +64,6 @@ xorg_process_message_61(struct xorgxrdp_info *xi, struct stream *s)
         in_uint16_le(s, crects[index].y);
         in_uint16_le(s, crects[index].w);
         in_uint16_le(s, crects[index].h);
-        //g_writeln("%d %d %d %d", crects[index * 4], crects[index * 4 + 1],
-        //          crects[index * 4 + 2], crects[index * 4 + 3]);
     }
     in_uint32_le(s, flags);
     in_uint8s(s, 4); /* frame_id */
@@ -117,7 +118,7 @@ xorg_process_message_61(struct xorgxrdp_info *xi, struct stream *s)
                                                   bmpdata + 4, &cdata_bytes);
         if (error != 0)
         {
-            g_writeln("xorg_process_message_61: error %d", error);
+            LOGLN((LOG_LEVEL_ERROR, LOGS "error %d", LOGP, error));
         }
         ((int *) bmpdata)[0] = cdata_bytes;
     }
@@ -141,11 +142,9 @@ xorg_process_message(struct xorgxrdp_info *xi, struct stream *s)
     int con_id;
     int mon_id;
 
-    //g_writeln("xorg_process_message: %d bytes", (int) (s->end - s->data));
     in_uint16_le(s, type);
     in_uint16_le(s, num);
     in_uint32_le(s, size);
-    //g_writeln("type %d num %d size %d", type, num, size);
     if (type == 3)
     {
         for (index = 0; index < num; index++)
@@ -153,7 +152,6 @@ xorg_process_message(struct xorgxrdp_info *xi, struct stream *s)
             phold = s->p;
             in_uint16_le(s, type);
             in_uint16_le(s, size);
-            //g_writeln("xorg_process_message 3 type %d size %d", type, size);
             switch (type)
             {
                 case 61:
@@ -170,11 +168,13 @@ xorg_process_message(struct xorgxrdp_info *xi, struct stream *s)
             phold = s->p;
             in_uint16_le(s, type);
             in_uint16_le(s, size);
-            g_writeln("xorg_process_message 100 type %d size %d", type, size);
+            LOGLN((LOG_LEVEL_INFO, LOGS "100 type %d size %d",
+                   LOGP, type, size));
             switch (type)
             {
                 case 1:
-                    g_writeln("xorg_process_message: xorgxrdp_helper_x11_delete_all_pixmaps");
+                    LOGLN((LOG_LEVEL_INFO, LOGS "calling "
+                           "xorgxrdp_helper_x11_delete_all_pixmaps", LOGP));
                     xorgxrdp_helper_x11_delete_all_pixmaps();
                     break;
                 case 2:
@@ -183,10 +183,10 @@ xorg_process_message(struct xorgxrdp_info *xi, struct stream *s)
                     in_uint32_le(s, magic);
                     in_uint32_le(s, con_id);
                     in_uint32_le(s, mon_id);
-                    //width = (width + 15) & ~15;
-                    //height = (height + 15) & ~15;
-                    g_writeln("xorg_process_message: xorgxrdp_helper_x11_create_pixmap");
-                    xorgxrdp_helper_x11_create_pixmap(width, height, magic, con_id, mon_id);
+                    LOGLN((LOG_LEVEL_INFO, LOGS "calling "
+                           "xorgxrdp_helper_x11_create_pixmap", LOGP));
+                    xorgxrdp_helper_x11_create_pixmap(width, height, magic,
+                                                      con_id, mon_id);
                     break;
             }
             s->p = phold + size;
@@ -215,7 +215,7 @@ xorg_data_in(struct trans* trans)
             in_uint32_le(s, len);
             if ((len < 0) || (len > 128 * 1024))
             {
-                g_writeln("xorg_data_in: bad size %d", len);
+                LOGLN((LOG_LEVEL_ERROR, LOGS "bad size %d", LOGP, len));
                 return 1;
             }
             if (len > 0)
@@ -229,7 +229,8 @@ xorg_data_in(struct trans* trans)
             s->p = s->data;
             if (xorg_process_message(xi, s) != 0)
             {
-                g_writeln("xorg_data_in: xorg_process_message failed");
+                LOGLN((LOG_LEVEL_INFO, LOGS "xorg_process_message failed",
+                       LOGP));
                 return 1;
             }
             init_stream(s, 0);
@@ -245,7 +246,6 @@ xorg_data_in(struct trans* trans)
 static int
 xrdp_process_message(struct xorgxrdp_info *xi, struct stream *s)
 {
-    //g_writeln("xrdp_process_message: %d bytes", (int) (s->end - s->data));
     return trans_write_copy_s(xi->xorg_trans, s);
 }
 
@@ -266,7 +266,7 @@ xrdp_data_in(struct trans* trans)
             in_uint32_le(s, len);
             if ((len < 0) || (len > 128 * 1024))
             {
-                g_writeln("xrdp_data_in: bad size %d", len);
+                LOGLN((LOG_LEVEL_ERROR, LOGS "bad size %d", LOGP, len));
                 return 1;
             }
             if (len > 0)
@@ -280,7 +280,8 @@ xrdp_data_in(struct trans* trans)
             s->p = s->data;
             if (xrdp_process_message(xi, s) != 0)
             {
-                g_writeln("xrdp_data_in: xrdp_process_message failed");
+                LOGLN((LOG_LEVEL_ERROR, LOGS "xrdp_process_message failed",
+                       LOGP));
                 return 1;
             }
             init_stream(s, 0);
@@ -299,6 +300,188 @@ sigpipe_func(int sig)
 }
 
 /*****************************************************************************/
+static int
+get_log_path(char *path, int bytes)
+{
+    char* log_path;
+    int rv;
+
+    rv = 1;
+    log_path = g_getenv("XORGXRDP_HELPER_LOG_PATH");
+    if (log_path == 0)
+    {
+        log_path = g_getenv("XDG_DATA_HOME");
+        if (log_path != 0)
+        {
+            g_snprintf(path, bytes, "%s%s", log_path, "/xrdp");
+            if (g_directory_exist(path) || (g_mkdir(path) == 0))
+            {
+                rv = 0;
+            }
+        }
+    }
+    else
+    {
+        g_snprintf(path, bytes, "%s", log_path);
+        if (g_directory_exist(path) || (g_mkdir(path) == 0))
+        {
+            rv = 0;
+        }
+    }
+    if (rv != 0)
+    {
+        log_path = g_getenv("HOME");
+        if (log_path != 0)
+        {
+            g_snprintf(path, bytes, "%s%s", log_path, "/.local");
+            if (g_directory_exist(path) || (g_mkdir(path) == 0))
+            {
+                g_snprintf(path, bytes, "%s%s", log_path, "/.local/share");
+                if (g_directory_exist(path) || (g_mkdir(path) == 0))
+                {
+                    g_snprintf(path, bytes, "%s%s", log_path, "/.local/share/xrdp");
+                    if (g_directory_exist(path) || (g_mkdir(path) == 0))
+                    {
+                        rv = 0;
+                    }
+                }
+            }
+        }
+    }
+    return rv;
+}
+
+/*****************************************************************************/
+static enum logLevels
+get_log_level(const char *level_str, enum logLevels default_level)
+{
+    static const char *levels[] = {
+        "LOG_LEVEL_ALWAYS",
+        "LOG_LEVEL_ERROR",
+        "LOG_LEVEL_WARNING",
+        "LOG_LEVEL_INFO",
+        "LOG_LEVEL_DEBUG",
+        "LOG_LEVEL_TRACE"
+    };
+    unsigned int i;
+
+    if (level_str == NULL || level_str[0] == 0)
+    {
+        return default_level;
+    }
+    for (i = 0; i < ARRAYSIZE(levels); ++i)
+    {
+        if (g_strcasecmp(levels[i], level_str) == 0)
+        {
+            return (enum logLevels) i;
+        }
+    }
+    return default_level;
+}
+
+/*****************************************************************************/
+static int
+get_display_num_from_display(char *display_text)
+{
+    int index;
+    int mode;
+    int host_index;
+    int disp_index;
+    int scre_index;
+    char host[256];
+    char disp[256];
+    char scre[256];
+
+    g_memset(host, 0, 256);
+    g_memset(disp, 0, 256);
+    g_memset(scre, 0, 256);
+
+    index = 0;
+    host_index = 0;
+    disp_index = 0;
+    scre_index = 0;
+    mode = 0;
+
+    while (display_text[index] != 0)
+    {
+        if (display_text[index] == ':')
+        {
+            mode = 1;
+        }
+        else if (display_text[index] == '.')
+        {
+            mode = 2;
+        }
+        else if (mode == 0)
+        {
+            host[host_index] = display_text[index];
+            host_index++;
+        }
+        else if (mode == 1)
+        {
+            disp[disp_index] = display_text[index];
+            disp_index++;
+        }
+        else if (mode == 2)
+        {
+            scre[scre_index] = display_text[index];
+            scre_index++;
+        }
+
+        index++;
+    }
+
+    host[host_index] = 0;
+    disp[disp_index] = 0;
+    scre[scre_index] = 0;
+    g_display_num = g_atoi(disp);
+    return 0;
+}
+
+/*****************************************************************************/
+static int
+xorgxrdp_helper_setup_log(void)
+{
+    struct log_config logconfig;
+    enum logLevels log_level;
+    char log_path[256];
+    char log_file[256];
+    char *display_text;
+    int error;
+
+    if (get_log_path(log_path, 255) != 0)
+    {
+        g_writeln("error reading XORGXRDP_HELPER_LOG_PATH and HOME "
+                  "environment variable");
+        g_deinit();
+        return 1;
+    }
+    display_text = g_getenv("DISPLAY");
+    if (display_text != NULL)
+    {
+        get_display_num_from_display(display_text);
+    }
+    g_snprintf(log_file, 255, "%s/xorgxrdp_helper.%d.log", log_path,
+               g_display_num);
+    g_writeln("xorgxrdp_helper::xorgxrdp_helper_setup_log: using "
+              "log file [%s]", log_file);
+    if (g_file_exist(log_file))
+    {
+        g_file_delete(log_file);
+    }
+    log_level = get_log_level(g_getenv("XORGXRDP_HELPER_LOG_LEVEL"),
+                              LOG_LEVEL_INFO);
+    logconfig.log_file = log_file;
+    logconfig.fd = -1;
+    logconfig.log_level = log_level;
+    logconfig.enable_syslog = 0;
+    logconfig.syslog_level = LOG_LEVEL_ALWAYS;
+    error = log_start_from_param(&logconfig);
+
+    return error;
+}
+
+/*****************************************************************************/
 int
 main(int argc, char **argv)
 {
@@ -311,7 +494,6 @@ main(int argc, char **argv)
     int wobj_count;
     int timeout;
     struct xorgxrdp_info xi;
-    //char text[64];
 
     if (argc < 2)
     {
@@ -324,29 +506,17 @@ main(int argc, char **argv)
         return 0;
     }
     g_init("xorgxrdp_helper");
-    log_start(".xorgxrdp_helper.log", "xorgxrdp_helper");
-    log_message(LOG_LEVEL_INFO, "xorgxrdp_helper startup");
-#if 0
-    g_file_close(1);
-    g_file_close(2);
-    g_snprintf(text, 63, "%s/.xorgxrdp_helper-%s-stdout.log",
-               g_getenv("HOME"), g_getenv("DISPLAY"));
-    text[63] = 0;
-    g_file_open_ex(text, 1, 1, 1, 1);
-    snprintf(text, 63, "%s/.xorgxrdp_helper-%s-stderr.log",
-             g_getenv("HOME"), g_getenv("DISPLAY"));
-    text[63] = 0;
-    g_file_open_ex(text, 1, 1, 1, 1);
-#endif
-    setvbuf(stdout, NULL, _IONBF, 0);
-    setvbuf(stderr, NULL, _IONBF, 0);
+    if (xorgxrdp_helper_setup_log() != 0)
+    {
+        return 1;
+    }
+    LOGLN((LOG_LEVEL_INFO, LOGS "startup", LOGP));
     g_memset(&xi, 0, sizeof(xi));
-    g_writeln("main: in");
     g_signal_pipe(sigpipe_func);
     if (xorgxrdp_helper_x11_init() != 0)
     {
-        g_writeln("xorgxrdp_helper_x11_init failed");
-        return 0;
+        LOGLN((LOG_LEVEL_ERROR, LOGS "xorgxrdp_helper_x11_init failed", LOGP));
+        return 1;
     }
     xorg_fd = g_atoi(g_getenv("XORGXRDP_XORG_FD"));
     xrdp_fd = g_atoi(g_getenv("XORGXRDP_XRDP_FD"));
@@ -379,47 +549,53 @@ main(int argc, char **argv)
                                        wobjs, &wobj_count, &timeout);
         if (error != 0)
         {
-            g_writeln("main: xorg trans_get_wait_objs_rw failed");
+            LOGLN((LOG_LEVEL_ERROR, LOGS "trans_get_wait_objs_rw failed",
+                   LOGP));
             break;
         }
         error = trans_get_wait_objs_rw(xi.xrdp_trans, robjs, &robj_count,
                                        wobjs, &wobj_count, &timeout);
         if (error != 0)
         {
-            g_writeln("main: xrdp trans_get_wait_objs_rw failed");
+            LOGLN((LOG_LEVEL_ERROR, LOGS "trans_get_wait_objs_rw failed",
+                   LOGP));
             break;
         }
         error = xorgxrdp_helper_x11_get_wait_objs(robjs, &robj_count);
         if (error != 0)
         {
-            g_writeln("main: xrdp xorgxrdp_helper_x11_get_wait_objs failed");
+            LOGLN((LOG_LEVEL_ERROR, LOGS "xorgxrdp_helper_x11_get_wait_objs "
+                   "failed", LOGP));
             break;
         }
         error = g_obj_wait(robjs, robj_count, wobjs, wobj_count, timeout);
         if (error != 0)
         {
-            g_writeln("main: g_obj_wait failed");
+            LOGLN((LOG_LEVEL_ERROR, LOGS "g_obj_wait failed", LOGP));
             break;
         }
         error = trans_check_wait_objs(xi.xorg_trans);
         if (error != 0)
         {
-            g_writeln("main: xorg trans_check_wait_objs failed");
+            LOGLN((LOG_LEVEL_ERROR, LOGS "trans_check_wait_objs failed",
+                   LOGP));
             break;
         }
         error = trans_check_wait_objs(xi.xrdp_trans);
         if (error != 0)
         {
-            g_writeln("main: xrdp trans_check_wait_objs failed");
+            LOGLN((LOG_LEVEL_ERROR, LOGS "trans_check_wait_objs failed",
+                   LOGP));
             break;
         }
         error = xorgxrdp_helper_x11_check_wai_objs();
         if (error != 0)
         {
-            g_writeln("main: xrdp xorgxrdp_helper_x11_check_wai_objs failed");
+            LOGLN((LOG_LEVEL_ERROR, LOGS "xorgxrdp_helper_x11_check_wai_objs "
+                   "failed", LOGP));
             break;
         }
     }
-    g_writeln("main: out");
+    LOGLN((LOG_LEVEL_INFO, LOGS "exit", LOGP));
     return 0;
 }

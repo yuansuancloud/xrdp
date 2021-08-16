@@ -20,6 +20,7 @@
 #include "os_calls.h"
 #include "xorgxrdp_helper.h"
 #include "xorgxrdp_helper_x11.h"
+#include "log.h"
 
 /* X11 */
 static Display *g_display = NULL;
@@ -159,34 +160,33 @@ xorgxrdp_helper_inf_init(void)
         return 1;
     }
     glx_ver = epoxy_glx_version(g_display, g_screen_num);
-    g_writeln("glx_ver %d", glx_ver);
+    LOGLN((LOG_LEVEL_INFO, LOGS "glx_ver %d", LOGP, glx_ver));
     if (glx_ver < 11) /* GLX version 1.1 */
     {
-        g_writeln("glx_ver too old %d", glx_ver);
+        LOGLN((LOG_LEVEL_ERROR, LOGS "glx_ver too old %d", LOGP, glx_ver));
         return 1;
     }
     if (!epoxy_has_glx_extension(g_display, g_screen_num,
                                  "GLX_EXT_texture_from_pixmap"))
     {
         ext_str = glXQueryExtensionsString(g_display, g_screen_num);
-        g_writeln("GLX_EXT_texture_from_pixmap not present [%s]", ext_str);
+        LOGLN((LOG_LEVEL_ERROR, LOGS "GLX_EXT_texture_from_pixmap not "
+               "present [%s]", LOGP, ext_str));
         return 1;
     }
-
-    g_writeln("GLX_EXT_texture_from_pixmap present");
+    LOGLN((LOG_LEVEL_INFO, LOGS "GLX_EXT_texture_from_pixmap present", LOGP));
     g_fbconfigs = glXChooseFBConfig(g_display, g_screen_num,
                                     g_fbconfig_attrs, &g_n_fbconfigs);
-    g_writeln("g_fbconfigs %p", g_fbconfigs);
+    LOGLN((LOG_LEVEL_INFO, LOGS "g_fbconfigs %p", LOGP, g_fbconfigs));
     g_gl_context = glXCreateNewContext(g_display, g_fbconfigs[0],
                                        GLX_RGBA_TYPE, NULL, 1);
-    g_writeln("g_gl_context %p", g_gl_context);
+    LOGLN((LOG_LEVEL_INFO, LOGS "g_gl_context %p", LOGP, g_gl_context));
     ok = glXMakeCurrent(g_display, g_root_window, g_gl_context);
-    g_writeln("ok %d", ok);
+    LOGLN((LOG_LEVEL_INFO, LOGS "ok %d", LOGP, ok));
     g_pixconfigs = glXChooseFBConfig(g_display, g_screen_num,
                                      g_pixconfig_attrs, &g_n_pixconfigs);
-    g_writeln("g_pixconfigs %p g_n_pixconfigs %d",
-              g_pixconfigs, g_n_pixconfigs);
-
+    LOGLN((LOG_LEVEL_INFO, LOGS "g_pixconfigs %p g_n_pixconfigs %d", LOGP,
+           g_pixconfigs, g_n_pixconfigs));
     return 0;
 }
 
@@ -303,17 +303,18 @@ xorgxrdp_helper_inf_init(void)
     eglInitialize(g_egl_display, NULL, NULL);
     eglChooseConfig(g_egl_display, g_choose_config_attr, &g_ecfg,
                     1, &g_num_config);
-    g_writeln("g_ecfg %p g_num_config %d", g_ecfg, g_num_config);
+    LOGLN((LOG_LEVEL_INFO, LOGS "g_ecfg %p g_num_config %d",
+           LOGP, g_ecfg, g_num_config));
     g_egl_surface = eglCreateWindowSurface(g_egl_display, g_ecfg,
                                            g_root_window, NULL);
-    g_writeln("g_egl_surface %p", g_egl_surface);
+    LOGLN((LOG_LEVEL_INFO, LOGS "g_egl_surface %p", LOGP, g_egl_surface));
     eglBindAPI(EGL_OPENGL_API);
     g_egl_context = eglCreateContext(g_egl_display, g_ecfg,
                                      EGL_NO_CONTEXT, g_create_context_attr);
-    g_writeln("g_egl_context %p", g_egl_context);
+    LOGLN((LOG_LEVEL_INFO, LOGS "g_egl_context %p", LOGP, g_egl_context));
     ok = eglMakeCurrent(g_egl_display, g_egl_surface, g_egl_surface,
                        g_egl_context);
-    g_writeln("ok %d", ok);
+    LOGLN((LOG_LEVEL_INFO, LOGS "ok %d", LOGP, ok));
 
     return 0;
 }
@@ -495,52 +496,39 @@ uniform vec4 umath;\n\
 uniform vec4 vmath;\n\
 void main(void)\n\
 {\n\
-    vec4 pixel;\n\
-    float f1;\n\
+    vec4 pix;\n\
     float x;\n\
     float y;\n\
-    if (gl_FragCoord.y < tex_size.y)\n\
+    x = gl_FragCoord.x;\n\
+    y = gl_FragCoord.y;\n\
+    if (y < tex_size.y)\n\
     {\n\
-        pixel = texture2D(tex, gl_FragCoord.xy / tex_size);\n\
-        pixel = ymath * pixel;\n\
-        f1 = clamp(pixel.r + pixel.g + pixel.b + ymath.a, 0.0, 1.0);\n\
-        gl_FragColor = f1;\n\
+        pix = texture2D(tex, vec2(x, y) / tex_size);\n\
+        pix = vec4(pix.rgb, 1.0);\n\
+        gl_FragColor = clamp(dot(ymath, pix), 0.0, 1.0);\n\
     }\n\
     else\n\
     {\n\
-        x = gl_FragCoord.x;\n\
-        y = (gl_FragCoord.y - tex_size.y) * 2.0;\n\
-        if (mod(gl_FragCoord.x, 2.0) < 1.0)\n\
+        y = (y - tex_size.y) * 2.0;\n\
+        if (mod(x, 2.0) < 1.0)\n\
         {\n\
-            pixel = texture2D(tex, vec2(x, y) / tex_size);\n\
-            pixel = umath * pixel;\n\
-            f1 = clamp(pixel.r + pixel.g + pixel.b + umath.a, 0.0, 1.0);\n\
-            pixel = texture2D(tex, vec2(x + 1.0, y) / tex_size);\n\
-            pixel = umath * pixel;\n\
-            f1 += clamp(pixel.r + pixel.g + pixel.b + umath.a, 0.0, 1.0);\n\
-            pixel = texture2D(tex, vec2(x, y + 1.0) / tex_size);\n\
-            pixel = umath * pixel;\n\
-            f1 += clamp(pixel.r + pixel.g + pixel.b + umath.a, 0.0, 1.0);\n\
-            pixel = texture2D(tex, vec2(x + 1.0, y + 1.0) / tex_size);\n\
-            pixel = umath * pixel;\n\
-            f1 += clamp(pixel.r + pixel.g + pixel.b + umath.a, 0.0, 1.0);\n\
-            gl_FragColor = f1 / 4.0;\n\
+            pix = texture2D(tex, vec2(x, y) / tex_size);\n\
+            pix += texture2D(tex, vec2(x + 1.0, y) / tex_size);\n\
+            pix += texture2D(tex, vec2(x, y + 1.0) / tex_size);\n\
+            pix += texture2D(tex, vec2(x + 1.0, y + 1.0) / tex_size);\n\
+            pix /= 4.0;\n\
+            pix = vec4(pix.rgb, 1.0);\n\
+            gl_FragColor = clamp(dot(umath, pix), 0.0, 1.0);\n\
         }\n\
         else\n\
         {\n\
-            pixel = texture2D(tex, vec2(x, y) / tex_size);\n\
-            pixel = vmath * pixel;\n\
-            f1 = clamp(pixel.r + pixel.g + pixel.b + vmath.a, 0.0, 1.0);\n\
-            pixel = texture2D(tex, vec2(x - 1.0, y) / tex_size);\n\
-            pixel = vmath * pixel;\n\
-            f1 += clamp(pixel.r + pixel.g + pixel.b + vmath.a, 0.0, 1.0);\n\
-            pixel = texture2D(tex, vec2(x, y + 1.0) / tex_size);\n\
-            pixel = vmath * pixel;\n\
-            f1 += clamp(pixel.r + pixel.g + pixel.b + vmath.a, 0.0, 1.0);\n\
-            pixel = texture2D(tex, vec2(x - 1.0, y + 1.0) / tex_size);\n\
-            pixel = vmath * pixel;\n\
-            f1 += clamp(pixel.r + pixel.g + pixel.b + vmath.a, 0.0, 1.0);\n\
-            gl_FragColor = f1 / 4.0;\n\
+            pix = texture2D(tex, vec2(x, y) / tex_size);\n\
+            pix += texture2D(tex, vec2(x - 1.0, y) / tex_size);\n\
+            pix += texture2D(tex, vec2(x, y + 1.0) / tex_size);\n\
+            pix += texture2D(tex, vec2(x - 1.0, y + 1.0) / tex_size);\n\
+            pix /= 4.0;\n\
+            pix = vec4(pix.rgb, 1.0);\n\
+            gl_FragColor = clamp(dot(vmath, pix), 0.0, 1.0);\n\
         }\n\
     }\n\
 }\n";
@@ -553,20 +541,11 @@ uniform vec4 umath;\n\
 uniform vec4 vmath;\n\
 void main(void)\n\
 {\n\
-    vec4 pixel;\n\
-    vec4 pixel1;\n\
-    vec4 pixel2;\n\
-    vec4 pixel3;\n\
-    pixel = texture2D(tex, gl_FragCoord.xy / tex_size);\n\
-    pixel1 = ymath * pixel;\n\
-    pixel2 = umath * pixel;\n\
-    pixel3 = vmath * pixel;\n\
-    pixel1 = vec4(pixel3.r + pixel3.g + pixel3.b + vmath.a,\n\
-                  pixel2.r + pixel2.g + pixel2.b + umath.a,\n\
-                  pixel1.r + pixel1.g + pixel1.b + ymath.a,\n\
-                  1.0);\n\
-    pixel2 = clamp(pixel1, 0.0, 1.0);\n\
-    gl_FragColor = pixel2;\n\
+    vec4 pix;\n\
+    pix = texture2D(tex, gl_FragCoord.xy / tex_size);\n\
+    pix = vec4(pix.rgb, 1.0);\n\
+    pix = vec4(dot(vmath, pix), dot(umath, pix), dot(ymath, pix), 1.0);\n\
+    gl_FragColor = clamp(pix, 0.0, 1.0);\n\
 }\n";
 
 /*****************************************************************************/
@@ -600,16 +579,16 @@ xorgxrdp_helper_x11_init(void)
         return 1;
     }
     gl_ver = epoxy_gl_version();
-    g_writeln("gl_ver %d", gl_ver);
+    LOGLN((LOG_LEVEL_INFO, LOGS "gl_ver %d", LOGP, gl_ver));
     if (gl_ver < 30)
     {
-        g_writeln("gl_ver too old %d", gl_ver);
+        LOGLN((LOG_LEVEL_ERROR, LOGS "gl_ver too old %d", LOGP, gl_ver));
         return 1;
     }
-
-    g_writeln("vendor: %s", (const char *) glGetString(GL_VENDOR));
-    g_writeln("version: %s", (const char *) glGetString(GL_VERSION));
-
+    LOGLN((LOG_LEVEL_INFO, LOGS "vendor: %s", LOGP,
+          (const char *) glGetString(GL_VENDOR)));
+    LOGLN((LOG_LEVEL_INFO, LOGS "version: %s", LOGP,
+          (const char *) glGetString(GL_VERSION)));
     /* create vertex array */
     glGenVertexArrays(1, &g_quad_vao);
     glBindVertexArray(g_quad_vao);
@@ -647,19 +626,19 @@ xorgxrdp_helper_x11_init(void)
         glCompileShader(g_si[index].vertex_shader);
         glGetShaderiv(g_si[index].vertex_shader, GL_COMPILE_STATUS,
                       &compiled);
-        g_writeln("xorgxrdp_helper_x11_init: vertex_shader compiled %d",
-                  compiled);
-        glCompileShader(g_si[index].fragment_shader);
+        LOGLN((LOG_LEVEL_INFO, LOGS "vertex_shader compiled %d",
+               LOGP, compiled);
+        glCompileShader(g_si[index].fragment_shader));
         glGetShaderiv(g_si[index].fragment_shader, GL_COMPILE_STATUS,
                       &compiled);
-        g_writeln("xorgxrdp_helper_x11_init: fragment_shader compiled %d",
-                  compiled);
+        LOGLN((LOG_LEVEL_INFO, LOGS "fragment_shader compiled %d",
+               LOGP, compiled));
         g_si[index].program = glCreateProgram();
         glAttachShader(g_si[index].program, g_si[index].vertex_shader);
         glAttachShader(g_si[index].program, g_si[index].fragment_shader);
         glLinkProgram(g_si[index].program);
         glGetProgramiv(g_si[index].program, GL_LINK_STATUS, &linked);
-        g_writeln("xorgxrdp_helper_x11_init: linked %d", linked);
+        LOGLN((LOG_LEVEL_INFO, LOGS "linked %d", LOGP, linked));
         g_si[index].tex_loc =
             glGetUniformLocation(g_si[index].program, "tex");
         g_si[index].tex_size_loc =
@@ -670,11 +649,11 @@ xorgxrdp_helper_x11_init(void)
             glGetUniformLocation(g_si[index].program, "umath");
         g_si[index].vmath_loc =
             glGetUniformLocation(g_si[index].program, "vmath");
-        g_writeln("xorgxrdp_helper_x11_init: tex_loc %d tex_size_loc %d "
-                  "ymath_loc %d umath_loc %d vmath_loc %d",
-                  g_si[index].tex_loc, g_si[index].tex_size_loc,
-                  g_si[index].ymath_loc, g_si[index].umath_loc,
-                  g_si[index].vmath_loc);
+        LOGLN((LOG_LEVEL_INFO, LOGS "tex_loc %d "
+               "tex_size_loc %d ymath_loc %d umath_loc %d vmath_loc %d",
+               LOGP, g_si[index].tex_loc, g_si[index].tex_size_loc,
+               g_si[index].ymath_loc, g_si[index].umath_loc,
+               g_si[index].vmath_loc));
         if ((g_si[index].ymath_loc >= 0) &&
             (g_si[index].umath_loc >= 0) &&
             (g_si[index].vmath_loc >= 0))
@@ -708,7 +687,7 @@ xorgxrdp_helper_x11_check_wai_objs(void)
 
     while (XPending(g_display) > 0)
     {
-        g_writeln("xorgxrdp_helper_x11_check_wai_objs: loop");
+        LOGLN((LOG_LEVEL_INFO, LOGS "loop", LOGP));
         XNextEvent(g_display, &xevent);
     }
     return 0;
@@ -916,21 +895,20 @@ xorgxrdp_helper_x11_create_pixmap(int width, int height, int magic,
     //mi->tex_format = XH_YUV444;
     if (mi->pixmap != 0)
     {
-        g_writeln("xorgxrdp_helper_x11_create_pixmap: error already setup");
+        LOGLN((LOG_LEVEL_ERROR, LOGS "error already setup", LOGP));
         return 1;
     }
-    g_writeln("xorgxrdp_helper_x11_create_pixmap: width %d height %d, "
-              "magic 0x%8.8x, con_id %d mod_id %d", width, height,
-              magic, con_id, mon_id);
+    LOGLN((LOG_LEVEL_INFO, LOGS "width %d height %d, "
+           "magic 0x%8.8x, con_id %d mod_id %d", LOGP, width, height,
+           magic, con_id, mon_id));
     pixmap = XCreatePixmap(g_display, g_root_window, width, height, 24);
-    g_writeln("xorgxrdp_helper_x11_create_pixmap: pixmap %d", (int) pixmap);
+    LOGLN((LOG_LEVEL_INFO, LOGS "pixmap %d", LOGP, (int) pixmap));
 
     if (xorgxrdp_helper_inf_create_image(pixmap, &inf_image) != 0)
     {
         return 1;
     }
-    g_writeln("xorgxrdp_helper_x11_create_pixmap: inf_image %p",
-              (void *) inf_image);
+    LOGLN((LOG_LEVEL_INFO, LOGS "inf_image %p", LOGP, (void *) inf_image));
 
     g_memset(img, 0, sizeof(img));
     img[0] = magic;
@@ -1048,6 +1026,7 @@ xorgxrdp_helper_x11_encode_pixmap(int width, int height, int mon_id,
     xorgxrdp_helper_inf_release_tex_image(mi->inf_image);
     glBindTexture(GL_TEXTURE_2D, 0);
     /* sync before encoding */
+    XFlush(g_display);
     glFinish();
     /* encode */
     rv = xorgxrdp_helper_encoder_encode(mi->ei, mi->enc_texture,
