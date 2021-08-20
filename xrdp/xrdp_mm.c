@@ -2722,6 +2722,10 @@ xrdp_mm_connect(struct xrdp_mm *self)
     return rv;
 }
 
+#define MIN_MS_BETWEEN_FRAMES 40
+/* can not change this to zero yet, g_obj_wait in os_calls.c treats
+   everything less then 1 to mean wait forever */
+#define MIN_MS_TO_WAIT_FOR_MORE_UPDATES 1
 /*****************************************************************************/
 int
 xrdp_mm_get_wait_objs(struct xrdp_mm *self,
@@ -2766,11 +2770,12 @@ xrdp_mm_get_wait_objs(struct xrdp_mm *self,
         if (xrdp_region_not_empty(self->wm->screen_dirty_region))
         {
             int now = g_time3();
-            int next_screen_draw_time = self->wm->last_screen_draw_time + 40;
+            int next_screen_draw_time = self->wm->last_screen_draw_time +
+                                        MIN_MS_BETWEEN_FRAMES;
             int diff = next_screen_draw_time - now;
             int ltimeout = *timeout;
-            diff = MAX(diff, 5);
-            diff = MIN(diff, 40);
+            diff = MAX(diff, MIN_MS_TO_WAIT_FOR_MORE_UPDATES);
+            diff = MIN(diff, MIN_MS_BETWEEN_FRAMES);
             LLOGLN(10, ("xrdp_mm_get_wait_objs: not empty diff %d", diff));
             if ((ltimeout < 0) || (ltimeout > diff))
             {
@@ -3076,7 +3081,7 @@ xrdp_mm_check_wait_objs(struct xrdp_mm *self)
             int now = g_time3();
             int diff = now - self->wm->last_screen_draw_time;
             LLOGLN(10, ("xrdp_mm_check_wait_objs: not empty diff %d", diff));
-            if ((diff < 0) || (diff >= 40))
+            if ((diff < 0) || (diff >= MIN_MS_BETWEEN_FRAMES))
             {
                 if (self->egfx_up)
                 {
@@ -3351,7 +3356,6 @@ server_paint_rects(struct xrdp_mod* mod, int num_drects, short *drects,
 
     wm = (struct xrdp_wm*)(mod->wm);
     mm = wm->mm;
-
     LLOGLN(10, ("server_paint_rects:"));
     LLOGLN(10, ("server_paint_rects: %p", mm->encoder));
 
