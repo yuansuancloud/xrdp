@@ -428,6 +428,7 @@ AC_CONFIG_FILES([
   xrdp/Makefile
   xrdpvr/Makefile
   xup/Makefile
+  xorgxrdp_helper/Makefile
 ])
 
 AC_OUTPUT

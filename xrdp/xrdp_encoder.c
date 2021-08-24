@@ -102,11 +102,11 @@ xrdp_encoder_create(struct xrdp_mm *mm)
             (12 << 24) | (66 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
         self->gfx = 1;
-#if defined(XRDP_NVENC)
-        self->codec_handle = xrdp_encoder_nvenc_create();
-#elif defined(XRDP_X264)
-        self->codec_handle = xrdp_encoder_x264_create();
-#endif
+// #if defined(XRDP_NVENC)
+//         self->codec_handle = xrdp_encoder_nvenc_create();
+// #elif defined(XRDP_X264)
+//         self->codec_handle = xrdp_encoder_x264_create();
+// #endif
     }
     else if (mm->egfx_flags & 2)
     {
@@ -160,11 +160,11 @@ xrdp_encoder_create(struct xrdp_mm *mm)
             /* XRDP_nv12 */
             (12 << 24) | (64 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
-#if defined(XRDP_NVENC)
-        self->codec_handle = xrdp_encoder_nvenc_create();
-#elif defined(XRDP_X264)
-        self->codec_handle = xrdp_encoder_x264_create();
-#endif
+// #if defined(XRDP_NVENC)
+//         self->codec_handle = xrdp_encoder_nvenc_create();
+// #elif defined(XRDP_X264)
+//         self->codec_handle = xrdp_encoder_x264_create();
+// #endif
     }
     else
     {
@@ -654,7 +654,10 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
         comp_bytes_pre = 4 + 4 + 2 + 2 + 2 + 2 + 2 + rcount * 8 + 4;
         enc_done_flags = 0;
     }
-
+    out_data_bytes = ((int *) (enc->data))[0];
+    g_memcpy(s->p, enc->data + 4, out_data_bytes);
+    error = 0;
+#if 0
 #if defined(XRDP_NVENC)
     error = xrdp_encoder_nvenc_encode(self->codec_handle, 0,
                                       enc->width, enc->height, 0,
@@ -665,6 +668,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
                                      enc->width, enc->height, 0,
                                      enc->data,
                                      s->p, &out_data_bytes);
+#endif
 #endif
 
     LOG_DEVEL(LOG_LEVEL_TRACE, "process_enc_h264: xrdp_encoder_x264_encode rv %d "
@@ -721,7 +725,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
 static int
 process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
 {
-    LOG_DEVEL(LOG_LEVEL_INFO, "process_enc_h264:");
+    LOG_DEVEL(LOG_LEVEL_INFO, "process_enc_h264: dummy func");
     return 0;
 }
 

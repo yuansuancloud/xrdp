@@ -3004,6 +3004,10 @@ xrdp_mm_connect(struct xrdp_mm *self)
     return rv;
 }
 
+#define MIN_MS_BETWEEN_FRAMES 40
+/* can not change this to zero yet, g_obj_wait in os_calls.c treats
+   everything less then 1 to mean wait forever */
+#define MIN_MS_TO_WAIT_FOR_MORE_UPDATES 1
 /*****************************************************************************/
 int
 xrdp_mm_get_wait_objs(struct xrdp_mm *self,
@@ -3038,6 +3042,7 @@ xrdp_mm_get_wait_objs(struct xrdp_mm *self,
                                               write_objs, wcount, timeout);
         }
     }
+
     if (self->encoder != 0)
     {
         read_objs[(*rcount)++] = self->encoder->xrdp_encoder_event_processed;
@@ -3047,11 +3052,12 @@ xrdp_mm_get_wait_objs(struct xrdp_mm *self,
         if (xrdp_region_not_empty(self->wm->screen_dirty_region))
         {
             int now = g_time3();
-            int next_screen_draw_time = self->wm->last_screen_draw_time + 40;
+            int next_screen_draw_time = self->wm->last_screen_draw_time +
+                                        MIN_MS_BETWEEN_FRAMES;
             int diff = next_screen_draw_time - now;
             int ltimeout = *timeout;
-            diff = MAX(diff, 5);
-            diff = MIN(diff, 40);
+            diff = MAX(diff, MIN_MS_TO_WAIT_FOR_MORE_UPDATES);
+            diff = MIN(diff, MIN_MS_BETWEEN_FRAMES);
             LOG_DEVEL(LOG_LEVEL_TRACE, "xrdp_mm_get_wait_objs: not empty diff %d", diff);
             if ((ltimeout < 0) || (ltimeout > diff))
             {
