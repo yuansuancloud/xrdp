@@ -23,13 +23,37 @@
 #if !defined(XRDP_CLIENT_INFO_H)
 #define XRDP_CLIENT_INFO_H
 
+#define XRDP_MAXIMUM_MONITORS 16
+
+/*
+ * 2.2.1.3.6.1 Monitor Definition (TS_MONITOR_DEF)
+ * 2.2.1.3.9.1 Monitor Attributes (TS_MONITOR_ATTRIBUTES)
+ */
+
 struct monitor_info
 {
   int left;
   int top;
+  int width;
+  int height;
   int right;
   int bottom;
+  int physical_width;
+  int physical_height;
+  int orientation;
+  int desktop_scale_factor;
+  int device_scale_factor;
   int is_primary;
+  int flags;
+};
+
+struct display_size_description
+{
+  int monitorCount; /* number of monitors detected (max = 16) */
+  struct monitor_info minfo[XRDP_MAXIMUM_MONITORS]; /* client monitor data */
+  struct monitor_info minfo_wm[XRDP_MAXIMUM_MONITORS]; /* client monitor data, non-negative values */
+  int session_width;
+  int session_height;
 };
 
 struct xrdp_client_info
@@ -111,8 +135,8 @@ struct xrdp_client_info
   int security_layer; /* 0 = rdp, 1 = tls , 2 = hybrid */
   int multimon; /* 0 = deny , 1 = allow */
   int monitorCount; /* number of monitors detected (max = 16) */
-  struct monitor_info minfo[16]; /* client monitor data */
-  struct monitor_info minfo_wm[16]; /* client monitor data, non-negative values */
+  struct monitor_info minfo[XRDP_MAXIMUM_MONITORS]; /* client monitor data */
+  struct monitor_info minfo_wm[XRDP_MAXIMUM_MONITORS]; /* client monitor data, non-negative values */
 
   int keyboard_type;
   int keyboard_subtype;

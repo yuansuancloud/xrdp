@@ -50,7 +50,12 @@ struct xrdp_mod
   int (*mod_frame_ack)(struct xrdp_mod* v, int flags, int frame_id);
   int (*mod_suppress_output)(struct xrdp_mod* v, int suppress,
                              int left, int top, int right, int bottom);
-  tintptr mod_dumby[100 - 11]; /* align, 100 minus the number of mod
+  int (*mod_server_monitor_resize)(struct xrdp_mod* v,
+                             int width, int height, int bpp);
+  int (*mod_server_monitor_full_invalidate)(struct xrdp_mod* v,
+                             int width, int height);
+  int (*mod_server_version_message)(struct xrdp_mod* v);
+  tintptr mod_dumby[100 - 14]; /* align, 100 minus the number of mod
                                   functions above */
   /* server functions */
   int (*server_begin_update)(struct xrdp_mod* v);
@@ -299,10 +304,13 @@ struct xrdp_mm
   struct xrdp_encoder *encoder;
   int cs2xr_cid_map[256];
   int xr2cr_cid_map[256];
+  int dynamic_monitor_chanid;
   struct xrdp_egfx *egfx;
   int egfx_up;
   int egfx_flags;
   int gfx_delay_autologin;
+  struct list *resize_queue;
+  int resizing;
 };
 
 struct xrdp_key_info
