@@ -6,8 +6,8 @@
 #define XH_YUV444   2
 
 #define XH_BT601    0
-#define XF_BT709FR  1
-#define XF_BTRFX    2
+#define XH_BT709FR  1
+#define XH_BTRFX    2
 
 struct xh_rect
 {
@@ -16,6 +16,8 @@ struct xh_rect
     short w;
     short h;
 };
+
+/* this logging can be replaced with new xrdp logging macros after merge */
 
 #if !defined(LOGLN)
 

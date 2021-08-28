@@ -18,11 +18,14 @@
 #include "xorgxrdp_helper_nvenc.h"
 #include "log.h"
 
+#define XH_NVENV_DEFAULT_QP 28
+
 typedef NVENCSTATUS
     (NVENCAPI * NvEncodeAPICreateInstanceProc)
     (NV_ENCODE_API_FUNCTION_LIST *functionList);
 
 static char g_lib_name[] = "libnvidia-encode.so";
+static char g_lib_name1[] = "libnvidia-encode.so.1";
 static char g_func_name[] = "NvEncodeAPICreateInstance";
 
 static NvEncodeAPICreateInstanceProc g_NvEncodeAPICreateInstance = NULL;
@@ -53,11 +56,19 @@ xorgxrdp_helper_nvenc_init(void)
     g_lib = g_load_library(g_lib_name);
     if (g_lib == 0)
     {
-        return 1;
+        g_lib = g_load_library(g_lib_name1);
+        if (g_lib == 0)
+        {
+            LOGLN((LOG_LEVEL_ERROR, LOGS "load library for %s/%s failed",
+                   LOGP, g_lib_name, g_lib_name1));
+            return 1;
+        }
     }
     g_NvEncodeAPICreateInstance = g_get_proc_address(g_lib, g_func_name);
     if (g_NvEncodeAPICreateInstance == NULL)
     {
+        LOGLN((LOG_LEVEL_ERROR, LOGS "get proc address for %s failed",
+               LOGP, g_func_name));
         return 1;
     }
     g_memset(&g_enc_funcs, 0, sizeof(g_enc_funcs));
@@ -86,6 +97,12 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
     NV_ENC_CONFIG encCfg;
     NVENCSTATUS nv_error;
     struct enc_info *lei;
+    char *rateControlMode_str;
+    char *averageBitRate_str;
+    char *qp_str;
+    int qp_int;
+    int averageBitRate_int;
+    int rc_set;
 
     lei = g_new0(struct enc_info, 1);
     if (lei == NULL)
@@ -112,11 +129,68 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
     encCfg.frameIntervalP = 1;  /* 1 + B_Frame_Count */
     encCfg.frameFieldMode = NV_ENC_PARAMS_FRAME_FIELD_MODE_FRAME;
     encCfg.mvPrecision = NV_ENC_MV_PRECISION_QUARTER_PEL;
-    encCfg.rcParams.rateControlMode = NV_ENC_PARAMS_RC_CONSTQP;
-    encCfg.rcParams.averageBitRate = 5000000;
-    encCfg.rcParams.constQP.qpInterP = 28;
-    encCfg.rcParams.constQP.qpInterB = 28;
-    encCfg.rcParams.constQP.qpIntra = 28;
+
+    /* these env vars can be added / changed in sesman.ini SessionVariables
+       example
+       XRDP_NVENC_RATE_CONTROL_MODE=NV_ENC_PARAMS_RC_CONSTQP
+       XRDP_NVENC_QP=30
+       or
+       XRDP_NVENC_RATE_CONTROL_MODE=NV_ENC_PARAMS_RC_VBR
+       XRDP_NVENC_AVERAGE_BITRATE=2000000 */
+    rateControlMode_str = g_getenv("XRDP_NVENC_RATE_CONTROL_MODE");
+    averageBitRate_str = g_getenv("XRDP_NVENC_AVERAGE_BITRATE");
+    qp_str = g_getenv("XRDP_NVENC_QP");
+    rc_set = 0;
+    if (rateControlMode_str != NULL)
+    {
+        if (g_strcmp(rateControlMode_str, "NV_ENC_PARAMS_RC_CONSTQP") == 0)
+        {
+            if (qp_str != NULL)
+            {
+                qp_int = g_atoi(qp_str);
+                if ((qp_int >= 0) && (qp_int <= 51))
+                {
+                    LOGLN((LOG_LEVEL_INFO, LOGS
+                           "using NV_ENC_PARAMS_RC_CONSTQP qp %d",
+                           LOGP, qp_int));
+                    encCfg.rcParams.rateControlMode = NV_ENC_PARAMS_RC_CONSTQP;
+                    encCfg.rcParams.constQP.qpInterP = qp_int;
+                    encCfg.rcParams.constQP.qpInterB = qp_int;
+                    encCfg.rcParams.constQP.qpIntra = qp_int;
+                    rc_set = 1;
+                }
+            }
+        }
+        else if (g_strcmp(rateControlMode_str, "NV_ENC_PARAMS_RC_VBR") == 0)
+        {
+            if (averageBitRate_str != NULL)
+            {
+                averageBitRate_int = g_atoi(averageBitRate_str);
+                if ((averageBitRate_int >= 5000) &&
+                    (averageBitRate_int <= 1000000000))
+                {
+                    LOGLN((LOG_LEVEL_INFO, LOGS
+                           "using NV_ENC_PARAMS_RC_VBR averageBitRate %d",
+                           LOGP, averageBitRate_int));
+                    encCfg.rcParams.rateControlMode = NV_ENC_PARAMS_RC_VBR;
+                    encCfg.rcParams.averageBitRate = averageBitRate_int;
+                    rc_set = 1;
+                }
+            }
+        }
+    }
+    if (!rc_set)
+    {
+        LOGLN((LOG_LEVEL_INFO, LOGS
+               "using default NV_ENC_PARAMS_RC_CONSTQP qp %d",
+               LOGP, XH_NVENV_DEFAULT_QP));
+        encCfg.rcParams.rateControlMode = NV_ENC_PARAMS_RC_CONSTQP;
+        encCfg.rcParams.constQP.qpInterP = XH_NVENV_DEFAULT_QP;
+        encCfg.rcParams.constQP.qpInterB = XH_NVENV_DEFAULT_QP;
+        encCfg.rcParams.constQP.qpIntra = XH_NVENV_DEFAULT_QP;
+        rc_set = 1;
+    }
+
     encCfg.encodeCodecConfig.h264Config.chromaFormatIDC = 1;
     encCfg.encodeCodecConfig.h264Config.idrPeriod = NVENC_INFINITE_GOPLENGTH;
 
