@@ -1903,131 +1903,190 @@ xrdp_sec_process_mcs_data_channels(struct xrdp_sec *self, struct stream *s)
     return 0;
 }
 
-/*****************************************************************************/
-/* reads the client monitors data */
-static int
-xrdp_sec_process_mcs_data_monitors(struct xrdp_sec *self, struct stream *s)
-{
-    int index;
-    int monitorCount;
-    int flags;
-    int x1;
-    int y1;
-    int x2;
-    int y2;
-    int got_primary;
-    struct xrdp_client_info *client_info = (struct xrdp_client_info *)NULL;
+struct display_size_description*
+process_monitor_stream(struct stream *s, int full_parameters) {
+    struct display_size_description *description = (struct display_size_description *)
+        g_malloc(sizeof(struct display_size_description), 1);
 
-    client_info = &(self->rdp_layer->client_info);
+    int NumMonitor;
+    struct monitor_info *monitor_layout;
+    struct xrdp_rect rect = {8192, 8192, -8192, -8192};
 
-    LLOGLN(10, ("xrdp_sec_process_mcs_data_monitors: processing monitors data, allow_multimon is %d", client_info->multimon));
-    /* this is an option set in xrdp.ini */
-    if (client_info->multimon != 1) /* are multi-monitors allowed ? */
+    in_uint32_le(s, NumMonitor);
+    LLOGLN(10, ("  NumMonitor %d", NumMonitor));
+
+    if (NumMonitor >= XRDP_MAXIMUM_MONITORS)
     {
-        LLOGLN(0, ("[INFO] xrdp_sec_process_mcs_data_monitors: multimon is not "
-               "allowed, skipping"));
-        return 0;
-    }
-    in_uint32_le(s, flags); /* flags */
-    //verify flags - must be 0x0
-    if (flags != 0)
-    {
-        LLOGLN(0, ("[ERROR] xrdp_sec_process_mcs_data_monitors: flags MUST be "
-               "zero, detected: %d", flags));
-        return 1;
-    }
-    in_uint32_le(s, monitorCount);
-    //verify monitorCount - max 16
-    if (monitorCount > 16)
-    {
-        LLOGLN(0, ("[ERROR] xrdp_sec_process_mcs_data_monitors: max allowed "
-               "monitors is 16, detected: %d", monitorCount));
-        return 1;
+        LLOGLN(10, (
+            "[MS-RDPBCGR] Protocol error: TS_UD_CS_MONITOR monitorCount "
+            "MUST be less than 16, received: %d", NumMonitor));
+        goto exit_error;
     }
 
-    LLOGLN(10, ("xrdp_sec_process_mcs_data_monitors: monitorCount= %d", monitorCount));
+    description->monitorCount = NumMonitor;
 
-    client_info->monitorCount = monitorCount;
+    int got_primary = 0;
 
-    x1 = 0;
-    y1 = 0;
-    x2 = 0;
-    y2 = 0;
-    got_primary = 0;
-    /* Add client_monitor_data to client_info struct, will later pass to X11rdp */
-    for (index = 0; index < monitorCount; index++)
+    for (int monitor_index = 0; monitor_index < NumMonitor; ++monitor_index)
     {
-        in_uint32_le(s, client_info->minfo[index].left);
-        in_uint32_le(s, client_info->minfo[index].top);
-        in_uint32_le(s, client_info->minfo[index].right);
-        in_uint32_le(s, client_info->minfo[index].bottom);
-        in_uint32_le(s, client_info->minfo[index].is_primary);
-        if (index == 0)
+        if (!s_check_rem(s, full_parameters == 0 ? 20 : 40))
         {
-            x1 = client_info->minfo[index].left;
-            y1 = client_info->minfo[index].top;
-            x2 = client_info->minfo[index].right;
-            y2 = client_info->minfo[index].bottom;
+            goto exit_error;
+        }
+
+        monitor_layout = description->minfo + monitor_index;
+        if (full_parameters != 0) {
+            in_uint32_le(s, monitor_layout->flags);
+        }
+        in_uint32_le(s, monitor_layout->left);
+        in_uint32_le(s, monitor_layout->top);
+        in_uint32_le(s, monitor_layout->width);
+        in_uint32_le(s, monitor_layout->height);
+        if (full_parameters != 0) {
+            in_uint32_le(s, monitor_layout->physical_width);
+            in_uint32_le(s, monitor_layout->physical_height);
+            in_uint32_le(s, monitor_layout->orientation);
+            in_uint32_le(s, monitor_layout->desktop_scale_factor);
+            in_uint32_le(s, monitor_layout->device_scale_factor);
+        }
+
+        monitor_layout->right = monitor_layout->left + monitor_layout->width;
+        monitor_layout->bottom = monitor_layout->top + monitor_layout->height;
+
+        if (full_parameters != 0)
+        {
+            LLOGLN(10, ("    Index: %d, Flags 0x%8.8x Left %d Top %d "
+                "Width %d Height %d PhysicalWidth %d PhysicalHeight %d "
+                "Orientation %d DesktopScaleFactor %d DeviceScaleFactor %d",
+                monitor_index, monitor_layout->flags, monitor_layout->left,
+                monitor_layout->top, monitor_layout->width, monitor_layout->height,
+                monitor_layout->physical_width, monitor_layout->physical_height,
+                monitor_layout->orientation, monitor_layout->desktop_scale_factor,
+                monitor_layout->device_scale_factor));
         }
         else
         {
-            x1 = MIN(x1, client_info->minfo[index].left);
-            y1 = MIN(y1, client_info->minfo[index].top);
-            x2 = MAX(x2, client_info->minfo[index].right);
-            y2 = MAX(y2, client_info->minfo[index].bottom);
+            LLOGLN(10, ("Received [MS-RDPBCGR] "
+                "TS_UD_CS_MONITOR.TS_MONITOR_DEF %d "
+                "left %d, top %d, right %d, bottom %d, flags 0x%8.8x",
+                monitor_index,
+                monitor_layout->left,
+                monitor_layout->top,
+                monitor_layout->right,
+                monitor_layout->bottom,
+                monitor_layout->is_primary));
         }
 
-        if (client_info->minfo[index].is_primary)
+        if (monitor_index == 0)
+        {
+            rect.left = monitor_layout->left;
+            rect.top = monitor_layout->top;
+            rect.right = monitor_layout->right;
+            rect.bottom = monitor_layout->bottom;
+        }
+        else
+        {
+            rect.left = MIN(monitor_layout->left, rect.left);
+            rect.top = MIN(monitor_layout->top, rect.top);
+            rect.right = MAX(rect.right, monitor_layout->right);
+            rect.bottom = MAX(rect.bottom, monitor_layout->bottom);
+        }
+
+        if (monitor_layout->is_primary)
         {
             got_primary = 1;
         }
-
-        LLOGLN(10, ("xrdp_sec_process_mcs_data_monitors: got a monitor [%d]: left= %d, top= %d, right= %d, bottom= %d, is_primary?= %d",
-                index,
-                client_info->minfo[index].left,
-                client_info->minfo[index].top,
-                client_info->minfo[index].right,
-                client_info->minfo[index].bottom,
-                client_info->minfo[index].is_primary));
     }
 
     if (!got_primary)
     {
         /* no primary monitor was set, choose the leftmost monitor as primary */
-        for (index = 0; index < monitorCount; index++)
+        for (int monitor_index = 0; monitor_index < NumMonitor; ++monitor_index)
         {
-            if (client_info->minfo[index].left == x1 &&
-                    client_info->minfo[index].top == y1)
+            monitor_layout = description->minfo + monitor_index;
+            if (monitor_layout->left != rect.left || monitor_layout->top != rect.top)
             {
-                client_info->minfo[index].is_primary = 1;
-                break;
+                continue;
             }
+            monitor_layout->is_primary = 1;
         }
     }
 
     /* set wm geometry */
-    if ((x2 > x1) && (y2 > y1))
+    if ((rect.right > rect.left) && (rect.bottom > rect.top))
     {
-        client_info->width = (x2 - x1) + 1;
-        client_info->height = (y2 - y1) + 1;
+        description->session_width = rect.right - rect.left;
+        description->session_height = rect.bottom - rect.top;
     }
     /* make sure virtual desktop size is ok */
-    if (client_info->width > 0x7FFE || client_info->width < 0xC8 ||
-        client_info->height > 0x7FFE || client_info->height < 0xC8)
+    if (description->session_width > 0x7FFE || description->session_width < 0xC8 ||
+            description->session_height > 0x7FFE || description->session_height < 0xC8)
     {
-        LLOGLN(0, ("[ERROR] xrdp_sec_process_mcs_data_monitors: error, virtual desktop width / height is too large"));
-        return 1; /* error */
+        LLOGLN(0, ("Client supplied virtual desktop width or height is invalid. "
+            "Allowed width range: min %d, max %d. Width received: %d. "
+            "Allowed height range: min %d, max %d. Height received: %d",
+            0xC8, 0x7FFE, description->session_width,
+            0xC8, 0x7FFE, description->session_width));
+        goto exit_error;
     }
 
     /* keep a copy of non negative monitor info values for xrdp_wm usage */
-    for (index = 0; index < monitorCount; index++)
+    for (int monitor_index = 0; monitor_index < NumMonitor; ++monitor_index)
     {
-        client_info->minfo_wm[index].left =  client_info->minfo[index].left - x1;
-        client_info->minfo_wm[index].top =  client_info->minfo[index].top - y1;
-        client_info->minfo_wm[index].right =  client_info->minfo[index].right - x1;
-        client_info->minfo_wm[index].bottom =  client_info->minfo[index].bottom - y1;
-        client_info->minfo_wm[index].is_primary =  client_info->minfo[index].is_primary;
+        monitor_layout = description->minfo_wm + monitor_index;
+
+        g_memcpy(monitor_layout, description->minfo + monitor_index, sizeof(struct monitor_info));
+
+        monitor_layout->left = monitor_layout->left - rect.left;
+        monitor_layout->top = monitor_layout->top - rect.top;
+        monitor_layout->right = monitor_layout->right - rect.left;
+        monitor_layout->bottom = monitor_layout->bottom - rect.top;
     }
+    return description;
+exit_error:
+    g_free(description);
+    return NULL;
+}
+
+/*****************************************************************************/
+/* Process a [MS-RDPBCGR] TS_UD_CS_MONITOR message.
+   reads the client monitors data */
+static int
+xrdp_sec_process_mcs_data_monitors(struct xrdp_sec *self, struct stream *s)
+{
+    int flags;
+    struct xrdp_client_info *client_info = &(self->rdp_layer->client_info);
+
+    /* this is an option set in xrdp.ini */
+    if (client_info->multimon != 1) /* are multi-monitors allowed ? */
+    {
+         LLOGLN(0, ("Multi-monitor is disabled by server config"));
+         return 0;
+    }
+    if (!s_check_rem(s, 8))
+    {
+         return 1;
+    }
+    in_uint32_le(s, flags); /* flags */
+
+    //verify flags - must be 0x0
+    if (flags != 0)
+    {
+        LLOGLN(10, (
+            "[MS-RDPBCGR] Protocol error: TS_UD_CS_MONITOR flags MUST be zero, "
+            "received: 0x%8.8x", flags));
+        return 1;
+    }
+
+    struct display_size_description *description = process_monitor_stream(s, 0);
+
+    client_info->monitorCount = description->monitorCount;
+    client_info->width = description->session_width;
+    client_info->height = description->session_height;
+    g_memcpy(client_info->minfo, description->minfo, sizeof(struct monitor_info) * XRDP_MAXIMUM_MONITORS);
+    g_memcpy(client_info->minfo_wm, description->minfo_wm, sizeof(struct monitor_info) * XRDP_MAXIMUM_MONITORS);
+
+    g_free(description);
 
     return 0;
 }

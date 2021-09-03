@@ -567,8 +567,8 @@ xrdp_egfx_send_reset_graphics(struct xrdp_egfx *egfx, int width, int height,
     {
         out_uint32_le(s, 0);
         out_uint32_le(s, 0);
-        out_uint32_le(s, width);
-        out_uint32_le(s, height);
+        out_uint32_le(s, width - 1);
+        out_uint32_le(s, height - 1);
         out_uint32_le(s, 1);
         monitor_count = 1;
     }
@@ -864,7 +864,17 @@ xrdp_egfx_create(struct xrdp_mm *mm, struct xrdp_egfx **egfx)
 int
 xrdp_egfx_delete(struct xrdp_egfx *egfx)
 {
-    g_free(egfx);
-    return 0;
-}
+    LLOGLN(0, ("xrdp_egfx_delete:"));
 
+    int error = xrdp_egfx_send_delete_surface(egfx, egfx->surface_id);
+    if (error != 0)
+    {
+        LLOGLN(0, ("dynamic_monitor_data: xrdp_egfx_send_delete_surface failed %d", error));
+        return error;
+    }
+    error = libxrdp_drdynvc_close(egfx->session, egfx->channel_id);
+
+    g_free(egfx);
+
+    return error;
+}
