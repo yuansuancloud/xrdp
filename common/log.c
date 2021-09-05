@@ -495,6 +495,10 @@ internal_log_config_copy(struct log_config *dest, const struct log_config *src)
 {
     int i;
 
+    if (src == NULL) {
+        return;
+    }
+
     dest->enable_syslog = src->enable_syslog;
     dest->fd = src->fd;
     dest->log_file = g_strdup(src->log_file);

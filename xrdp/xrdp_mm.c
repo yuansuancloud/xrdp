@@ -39,6 +39,7 @@
 #include "xrdp_encoder.h"
 #include "xrdp_sockets.h"
 #include "xrdp_egfx.h"
+#include <limits.h>
 
 
 
@@ -1567,6 +1568,7 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct display_size_desc
         xrdp_encoder_delete(mm->encoder);
         mm->encoder = NULL;
         egfx_initialize(mm);
+        module->mod_frame_ack(module, 0, INT_MAX);
     }
 #endif
     wm->client_info->monitorCount = description->monitorCount;
