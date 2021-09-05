@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "string_calls.h"
 
 #include <epoxy/gl.h>
 

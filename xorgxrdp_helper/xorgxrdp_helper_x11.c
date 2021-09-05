@@ -419,7 +419,7 @@ static GLuint g_fb = 0;
 #define XH_SHADERRGB2YUV420AV   4
 #define XH_SHADERRGB2YUV420AVV2 5
 
-#define XH_NUM_SHADERS 3
+#define XH_NUM_SHADERS 6
 
 struct shader_info
 {
