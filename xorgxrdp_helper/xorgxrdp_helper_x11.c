@@ -156,10 +156,6 @@ xorgxrdp_helper_inf_init(void)
     int glx_ver;
     int ok;
 
-    if (!epoxy_has_glx(g_display))
-    {
-        return 1;
-    }
     glx_ver = epoxy_glx_version(g_display, g_screen_num);
     LOGLN((LOG_LEVEL_INFO, LOGS "glx_ver %d", LOGP, glx_ver));
     if (glx_ver < 11) /* GLX version 1.1 */
@@ -416,9 +412,12 @@ static struct mon_info g_mons[16];
 static GLuint g_quad_vao = 0;
 static GLuint g_fb = 0;
 
-#define XH_SHADERCOPY       0
-#define XH_SHADERRGB2YUV420 1
-#define XH_SHADERRGB2YUV444 2
+#define XH_SHADERCOPY           0
+#define XH_SHADERRGB2YUV420     1
+#define XH_SHADERRGB2YUV444     2
+#define XH_SHADERRGB2YUV420MV   3
+#define XH_SHADERRGB2YUV420AV   4
+#define XH_SHADERRGB2YUV420AVV2 5
 
 #define XH_NUM_SHADERS 3
 
@@ -510,7 +509,7 @@ void main(void)\n\
     }\n\
     else\n\
     {\n\
-        y = (y - tex_size.y) * 2.0;\n\
+        y = floor(y - tex_size.y) * 2.0 + 0.5;\n\
         if (mod(x, 2.0) < 1.0)\n\
         {\n\
             pix = texture2D(tex, vec2(x, y) / tex_size);\n\
@@ -547,6 +546,207 @@ void main(void)\n\
     pix = vec4(pix.rgb, 1.0);\n\
     pix = vec4(dot(vmath, pix), dot(umath, pix), dot(ymath, pix), 1.0);\n\
     gl_FragColor = clamp(pix, 0.0, 1.0);\n\
+}\n";
+/*
+RGB
+    00 10 20 30 40 50 60 70 80 90 A0 B0 C0 D0 E0 F0
+    01 11 21 31 41 51 61 71 81 91 A1 B1 C1 D1 E1 F1
+    02 12 22 32 42 52 62 72 82 92 A2 B2 C2 D2 E2 F2
+    03 13 23 33 43 53 63 73 83 93 A3 B3 C3 D3 E3 F3
+    04 14 24 34 44 54 64 74 84 94 A4 B4 C4 D4 E4 F4
+    05 15 25 35 45 55 65 75 85 95 A5 B5 C5 D5 E5 F5
+    06 16 26 36 46 56 66 76 86 96 A6 B6 C6 D6 E6 F6
+    07 17 27 37 47 57 67 77 87 97 A7 B7 C7 D7 E7 F7
+    08 18 28 38 48 58 68 78 88 98 A8 B8 C8 D8 E8 F8
+    09 19 29 39 49 59 69 79 89 99 A9 B9 C9 D9 E9 F9
+    0A 1A 2A 3A 4A 5A 6A 7A 8A 9A AA BA CA DA EA FA
+    0B 1B 2B 3B 4B 5B 6B 7B 8B 9B AB BB CB DB EB FB
+    0C 1C 2C 3C 4C 5C 6C 7C 8C 9C AC BC CC DC EC FC
+    0D 1D 2D 3D 4D 5D 6D 7D 8D 9D AD BD CD DD ED FD
+    0E 1E 2E 3E 4E 5E 6E 7E 8E 9E AE BE CE DE EE FE
+    0F 1F 2F 3F 4F 5F 6F 7F 8F 9F AF BF CF DF EF FF
+MAIN VIEW - NV12
+    /---------------------Y-----------------------\
+    00 10 20 30 40 50 60 70 80 90 A0 B0 C0 D0 E0 F0
+    01 11 21 31 41 51 61 71 81 91 A1 B1 C1 D1 E1 F1
+    ...
+    0F 1F 2F 3F 4F 5F 6F 7F 8F 9F AF BF CF DF EF FF
+    /U /V /U /V /U /V /U /V /U /V /U /V /U /V /U /V
+    00 00 20 20 40 40 60 60 80 80 A0 A0 C0 C0 E0 E0
+    02 02 22 22 42 42 62 62 82 82 A2 A2 C2 C2 E2 E2
+    ...
+    0E 0E 2E 2E 4E 4E 6E 6E 8E 8E AE AE CE CE EE EE
+*/
+static const GLchar g_fs_rgb_to_yuv420_mv[] =
+"\
+uniform sampler2D tex;\n\
+uniform vec2 tex_size;\n\
+uniform vec4 ymath;\n\
+uniform vec4 umath;\n\
+uniform vec4 vmath;\n\
+void main(void)\n\
+{\n\
+    vec4 pix;\n\
+    float x;\n\
+    float y;\n\
+    x = gl_FragCoord.x;\n\
+    y = gl_FragCoord.y;\n\
+    if (y < tex_size.y)\n\
+    {\n\
+        pix = texture2D(tex, vec2(x, y) / tex_size);\n\
+        pix = vec4(pix.rgb, 1.0);\n\
+        gl_FragColor = clamp(dot(ymath, pix), 0.0, 1.0);\n\
+    }\n\
+    else\n\
+    {\n\
+        y = floor(y - tex_size.y) * 2.0 + 0.5;\n\
+        if (mod(x, 2.0) < 1.0)\n\
+        {\n\
+            pix = texture2D(tex, vec2(x, y) / tex_size);\n\
+            pix = vec4(pix.rgb, 1.0);\n\
+            gl_FragColor = clamp(dot(umath, pix), 0.0, 1.0);\n\
+        }\n\
+        else\n\
+        {\n\
+            pix = texture2D(tex, vec2(x - 1.0, y) / tex_size);\n\
+            pix = vec4(pix.rgb, 1.0);\n\
+            gl_FragColor = clamp(dot(vmath, pix), 0.0, 1.0);\n\
+        }\n\
+    }\n\
+}\n";
+/*
+AUXILIARY VIEW - NV12
+    /---------------------U-----------------------\
+    01 11 21 31 41 51 61 71 81 91 A1 B1 C1 D1 E1 F1
+    03 13 23 33 43 53 63 73 83 93 A3 B3 C3 D3 E3 F4
+    ...
+    0F 1F 2F 3F 4F 5F 6F 7F 8F 9F AF BF CF DF EF FF
+    /---------------------V-----------------------\
+    01 11 21 31 41 51 61 71 81 91 A1 B1 C1 D1 E1 F1
+    03 13 23 33 43 53 63 73 83 93 A3 B3 C3 D3 E3 F4
+    ...
+    0F 1F 2F 3F 4F 5F 6F 7F 8F 9F AF BF CF DF EF FF
+    ... (8 LINES U, 8 LINES V, REPEAT)
+    /U /V /U /V /U /V /U /V /U /V /U /V /U /V /U /V
+    10 10 30 30 50 50 70 70 90 90 B0 B0 D0 D0 F0 F0
+    12 12 32 32 52 52 72 72 92 92 B2 B2 D2 D2 F2 F2
+    ...
+    1E 1E 3E 3E 5E 5E 7E 7E 9E 9E BE BE DE DE FE FE
+*/
+static const GLchar g_fs_rgb_to_yuv420_av[] =
+"\
+uniform sampler2D tex;\n\
+uniform vec2 tex_size;\n\
+uniform vec4 umath;\n\
+uniform vec4 vmath;\n\
+void main(void)\n\
+{\n\
+    vec4 pix;\n\
+    float x;\n\
+    float y;\n\
+    float y1;\n\
+    x = gl_FragCoord.x;\n\
+    y = gl_FragCoord.y;\n\
+    if (y < tex_size.y)\n\
+    {\n\
+        y1 = mod(y, 16.0);\n\
+        if (y1 < 8.0)\n\
+        {\n\
+            y = floor(y / 16.0) * 8.0 + y1;\n\
+            y = floor(y) * 2.0 + 1.5;\n\
+            pix = texture2D(tex, vec2(x, y) / tex_size);\n\
+            pix = vec4(pix.rgb, 1.0);\n\
+            gl_FragColor = clamp(dot(umath, pix), 0.0, 1.0);\n\
+        }\n\
+        else\n\
+        {\n\
+            y = floor(y / 16.0) * 8.0 + (y1 - 8.0);\n\
+            y = floor(y) * 2.0 + 1.5;\n\
+            pix = texture2D(tex, vec2(x, y) / tex_size);\n\
+            pix = vec4(pix.rgb, 1.0);\n\
+            gl_FragColor = clamp(dot(vmath, pix), 0.0, 1.0);\n\
+        }\n\
+    }\n\
+    else\n\
+    {\n\
+        y = floor(y - tex_size.y) * 2.0 + 0.5;\n\
+        if (mod(x, 2.0) < 1.0)\n\
+        {\n\
+            pix = texture2D(tex, vec2(x + 1.0, y) / tex_size);\n\
+            pix = vec4(pix.rgb, 1.0);\n\
+            gl_FragColor = clamp(dot(umath, pix), 0.0, 1.0);\n\
+        }\n\
+        else\n\
+        {\n\
+            pix = texture2D(tex, vec2(x, y) / tex_size);\n\
+            pix = vec4(pix.rgb, 1.0);\n\
+            gl_FragColor = clamp(dot(vmath, pix), 0.0, 1.0);\n\
+        }\n\
+    }\n\
+}\n";
+/*
+AUXILIARY VIEW V2 - NV12
+    /----------U----------\ /----------V----------\
+    10 30 50 70 90 B0 D0 F0 10 30 50 70 90 B0 D0 F0
+    11 31 51 71 91 B1 D1 F1 11 31 51 71 91 B1 D1 F1
+    ...
+    1F 3F 5F 7F 9F BF DF FF 1F 3F 5F 7F 9F BF DF FF
+    /----------U----------\ /----------V----------\
+    01 21 41 61 81 A1 C1 E1 01 21 41 61 81 A1 C1 E1
+    03 23 43 63 83 A3 C3 E3 03 23 43 63 83 A3 C3 E3
+    ...
+    0F 2F 4F 6F 8F AF CF EF 0F 2F 4F 6F 8F AF CF EF
+*/
+static const GLchar g_fs_rgb_to_yuv420_av_v2[] =
+"\
+uniform sampler2D tex;\n\
+uniform vec2 tex_size;\n\
+uniform vec4 umath;\n\
+uniform vec4 vmath;\n\
+void main(void)\n\
+{\n\
+    vec4 pix;\n\
+    float x;\n\
+    float y;\n\
+    float x1;\n\
+    x = gl_FragCoord.x;\n\
+    y = gl_FragCoord.y;\n\
+    x1 = tex_size.x / 2.0;\n\
+    if (y < tex_size.y)\n\
+    {\n\
+        if (x < x1)\n\
+        {\n\
+            x = floor(x) * 2.0 + 1.5;\n\
+            pix = texture2D(tex, vec2(x, y) / tex_size);\n\
+            pix = vec4(pix.rgb, 1.0);\n\
+            gl_FragColor = clamp(dot(umath, pix), 0.0, 1.0);\n\
+        }\n\
+        else\n\
+        {\n\
+            x = floor(x - x1) * 2.0 + 1.5;\n\
+            pix = texture2D(tex, vec2(x, y) / tex_size);\n\
+            pix = vec4(pix.rgb, 1.0);\n\
+            gl_FragColor = clamp(dot(vmath, pix), 0.0, 1.0);\n\
+        }\n\
+    }\n\
+    else\n\
+    {\n\
+        y = floor(y - tex_size.y) * 2.0 + 1.5;\n\
+        if (x < x1)\n\
+        {\n\
+            x = floor(x) * 2.0 + 0.5;\n\
+            pix = texture2D(tex, vec2(x, y) / tex_size);\n\
+            pix = vec4(pix.rgb, 1.0);\n\
+            gl_FragColor = clamp(dot(umath, pix), 0.0, 1.0);\n\
+        }\n\
+        else\n\
+        {\n\
+            x = floor(x - x1) * 2.0 + 0.5;\n\
+            pix = texture2D(tex, vec2(x, y) / tex_size);\n\
+            pix = vec4(pix.rgb, 1.0);\n\
+            gl_FragColor = clamp(dot(vmath, pix), 0.0, 1.0);\n\
+        }\n\
+    }\n\
 }\n";
 
 /*****************************************************************************/
@@ -614,6 +814,15 @@ xorgxrdp_helper_x11_init(void)
     vsource[XH_SHADERRGB2YUV444] = g_vs;
     fsource[XH_SHADERRGB2YUV444] = g_fs_rgb_to_yuv444;
 
+    vsource[XH_SHADERRGB2YUV420MV] = g_vs;
+    fsource[XH_SHADERRGB2YUV420MV] = g_fs_rgb_to_yuv420_mv;
+
+    vsource[XH_SHADERRGB2YUV420AV] = g_vs;
+    fsource[XH_SHADERRGB2YUV420AV] = g_fs_rgb_to_yuv420_av;
+
+    vsource[XH_SHADERRGB2YUV420AVV2] = g_vs;
+    fsource[XH_SHADERRGB2YUV420AVV2] = g_fs_rgb_to_yuv420_av_v2;
+
     for (index = 0; index < XH_NUM_SHADERS; index++)
     {
         g_si[index].vertex_shader = glCreateShader(GL_VERTEX_SHADER);
@@ -655,16 +864,21 @@ xorgxrdp_helper_x11_init(void)
                LOGP, g_si[index].tex_loc, g_si[index].tex_size_loc,
                g_si[index].ymath_loc, g_si[index].umath_loc,
                g_si[index].vmath_loc));
-        if ((g_si[index].ymath_loc >= 0) &&
-            (g_si[index].umath_loc >= 0) &&
-            (g_si[index].vmath_loc >= 0))
+        /* set default matrix */
+        glUseProgram(g_si[index].program);
+        if (g_si[index].ymath_loc >= 0)
         {
-            /* set default matrix */
-            glUseProgram(g_si[index].program);
             glUniform4fv(g_si[index].ymath_loc, 1, g_rgb2yux_matrix[0].ymath);
+        }
+        if (g_si[index].umath_loc >= 0)
+        {
             glUniform4fv(g_si[index].umath_loc, 1, g_rgb2yux_matrix[0].umath);
+        }
+        if (g_si[index].vmath_loc >= 0)
+        {
             glUniform4fv(g_si[index].vmath_loc, 1, g_rgb2yux_matrix[0].vmath);
         }
+        glUseProgram(0);
     }
     g_memset(g_mons, 0, sizeof(g_mons));
     xorgxrdp_helper_encoder_init();
@@ -786,6 +1000,8 @@ get_vertices420(GLuint *vertices_bytes, GLuint *vertices_pointes,
     for (index = 0; index < num_crects; index++)
     {
         crect = crects + index;
+        LOGLND((LOG_LEVEL_INFO, LOGS "rect index %d x %d y %d w %d h %d",
+                LOGP, index, crect->x, crect->y, crect->w, crect->h));
         x1 = crect->x / fwidth;
         y1 = crect->y / fheight;
         x2 = (crect->x + crect->w) / fwidth;
@@ -924,6 +1140,8 @@ xorgxrdp_helper_x11_create_pixmap(int width, int height, int magic,
     /* texture that gets encoded */
     glGenTextures(1, &enc_texture);
     glBindTexture(GL_TEXTURE_2D, enc_texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     if (mi->tex_format == XH_YUV420)
     {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height * 3 / 2, 0,
@@ -947,8 +1165,8 @@ xorgxrdp_helper_x11_create_pixmap(int width, int height, int magic,
     /* texture that binds with pixmap */
     glGenTextures(1, &bmp_texture);
     glBindTexture(GL_TEXTURE_2D, bmp_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     if (xorgxrdp_helper_encoder_create_encoder(width, height,
@@ -1026,6 +1244,7 @@ xorgxrdp_helper_x11_encode_pixmap(int width, int height, int mon_id,
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     xorgxrdp_helper_inf_release_tex_image(mi->inf_image);
     glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
     /* sync before encoding */
     XFlush(g_display);
     glFinish();
