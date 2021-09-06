@@ -48,6 +48,8 @@ struct enc_info
     NV_ENC_REGISTERED_PTR registeredResource;
 };
 
+extern int xrdp_invalidate;
+
 /*****************************************************************************/
 int
 xorgxrdp_helper_nvenc_init(void)
@@ -198,6 +200,7 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
 
     encCfg.encodeCodecConfig.h264Config.chromaFormatIDC = 1;
     encCfg.encodeCodecConfig.h264Config.idrPeriod = NVENC_INFINITE_GOPLENGTH;
+    encCfg.encodeCodecConfig.h264Config.repeatSPSPPS = 1;
 
     g_memset(&createEncodeParams, 0, sizeof(createEncodeParams));
     createEncodeParams.version = NV_ENC_INITIALIZE_PARAMS_VER;
@@ -315,6 +318,14 @@ xorgxrdp_helper_nvenc_encode(struct enc_info *ei, int tex,
     picParams.outputBitstream = ei->bitstreamBuffer;
     picParams.inputTimeStamp = ei->frameCount;
     picParams.pictureStruct = NV_ENC_PIC_STRUCT_FRAME;
+    picParams.encodePicFlags = NV_ENC_PIC_FLAG_OUTPUT_SPSPPS;
+    if (xrdp_invalidate > 0) {
+        picParams.encodePicFlags |= NV_ENC_PIC_FLAG_FORCEIDR;
+        ++xrdp_invalidate;
+        if (xrdp_invalidate == 5) {
+            xrdp_invalidate = 0;
+        }
+    }
     nv_error = g_enc_funcs.nvEncEncodePicture(ei->enc, &picParams);
     rv = 1;
     if (nv_error == NV_ENC_SUCCESS)

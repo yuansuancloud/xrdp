@@ -33,6 +33,7 @@ static int g_shmem_id_mapped = 0;
 static int g_shmem_id = 0;
 static void *g_shmem_pixels = 0;
 static int g_display_num = 0;
+int xrdp_invalidate = 0;
 
 /*****************************************************************************/
 static int
@@ -177,6 +178,7 @@ xorg_process_message(struct xorgxrdp_info *xi, struct stream *s)
                     LOGLN((LOG_LEVEL_INFO, LOGS "calling "
                            "xorgxrdp_helper_x11_delete_all_pixmaps", LOGP));
                     xorgxrdp_helper_x11_delete_all_pixmaps();
+                    xrdp_invalidate = 1;
                     break;
                 case 2:
                     in_uint16_le(s, width);
@@ -188,6 +190,7 @@ xorg_process_message(struct xorgxrdp_info *xi, struct stream *s)
                            "xorgxrdp_helper_x11_create_pixmap", LOGP));
                     xorgxrdp_helper_x11_create_pixmap(width, height, magic,
                                                       con_id, mon_id);
+                    xrdp_invalidate = 1;
                     break;
             }
             s->p = phold + size;
@@ -247,6 +250,21 @@ xorg_data_in(struct trans* trans)
 static int
 xrdp_process_message(struct xorgxrdp_info *xi, struct stream *s)
 {
+    int len;
+    int msg_type1;
+    int msg_type2;
+
+    in_uint32_le(s, len);
+    in_uint16_le(s, msg_type1);
+    if (msg_type1 == 103) { // client message
+         in_uint32_le(s, msg_type2);
+         if (msg_type2 == 200) { // invalidate
+             LOGLN((LOG_LEVEL_DEBUG, LOGS "Invalidate found (len: %d, msg1: %d, msg2: %d)", LOGP, len, msg_type1, msg_type2));
+             xrdp_invalidate = 1;
+         }
+    }
+    //Reset read pointer
+    s->p = s->data;
     return trans_write_copy_s(xi->xorg_trans, s);
 }
 

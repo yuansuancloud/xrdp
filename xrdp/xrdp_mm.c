@@ -1135,10 +1135,12 @@ xrdp_mm_egfx_send_planar_bitmap(struct xrdp_mm *self,
 }
 
 /******************************************************************************/
-static void
+static int
 xrdp_mm_egfx_invalidate_all(struct xrdp_mm *self) {
     struct xrdp_rect xr_rect;
     struct xrdp_bitmap *screen;
+    struct xrdp_mod *module = self->mod;
+    int error;
 
     LOG(LOG_LEVEL_INFO, "xrdp_mm_egfx_invalidate_all:");
 
@@ -1152,7 +1154,16 @@ xrdp_mm_egfx_invalidate_all(struct xrdp_mm *self) {
     {
         self->wm->screen_dirty_region = xrdp_region_create(self->wm);
     }
-    xrdp_region_add_rect(self->wm->screen_dirty_region, &xr_rect);
+    error = xrdp_region_add_rect(self->wm->screen_dirty_region, &xr_rect);
+
+    if (error == 0 && module != 0) {
+        error = module->mod_server_monitor_full_invalidate(module, self->wm->session->client_info->width, self->wm->session->client_info->height);
+        if (error != 0)
+        {
+            LOG_DEVEL(LOG_LEVEL_INFO, "mod_server_monitor_full_invalidate failed %d", error);
+        }
+    }
+    return error;
 }
 
 /******************************************************************************/
@@ -1257,8 +1268,8 @@ xrdp_mm_egfx_caps_advertise(void* user, int caps_count,
                                       screen->width, screen->height,
                                       XR_PIXEL_FORMAT_XRGB_8888);
         xrdp_egfx_send_map_surface(self->egfx, self->egfx->surface_id, 0, 0);
-        xrdp_mm_egfx_invalidate_all(self);
         self->encoder = xrdp_encoder_create(self);
+        xrdp_mm_egfx_invalidate_all(self);
         if (self->gfx_delay_autologin)
         {
             self->gfx_delay_autologin = 0;
@@ -1564,11 +1575,10 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct display_size_desc
 
 #if defined(XRDP_X264) || defined(XRDP_NVENC)
     if (error == 0 && mm->egfx == NULL && mm->egfx_up == 0) {
-        //Disable the encoder until the resize is complete. Ack all frames to prevent an infinite loop.
+        // Disable the encoder until the resize is complete.
         xrdp_encoder_delete(mm->encoder);
         mm->encoder = NULL;
         egfx_initialize(mm);
-        module->mod_frame_ack(module, 0, INT_MAX);
     }
 #endif
     wm->client_info->monitorCount = description->monitorCount;
@@ -1576,6 +1586,17 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct display_size_desc
     wm->client_info->height = description->session_height;
     g_memcpy(wm->client_info->minfo, description->minfo, sizeof(struct monitor_info) * XRDP_MAXIMUM_MONITORS);
     g_memcpy(wm->client_info->minfo_wm, description->minfo_wm, sizeof(struct monitor_info) * XRDP_MAXIMUM_MONITORS);
+
+    if (module != 0) {
+        error = module->mod_server_monitor_full_invalidate(module, description->session_width, description->session_height);
+        if (error != 0)
+        {
+            LOG_DEVEL(LOG_LEVEL_INFO, "dynamic_monitor_data: mod_server_monitor_full_invalidate failed %d", error);
+            goto exit;
+        }
+        // Ack all frames to speed up resize.
+        module->mod_frame_ack(module, 0, INT_MAX);
+    }
     return 0;
 exit:
     mm->resizing = 0;
