@@ -187,20 +187,21 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
         LOGLN((LOG_LEVEL_INFO, LOGS
                "using default NV_ENC_PARAMS_RC_CONSTQP qp %d",
                LOGP, XH_NVENV_DEFAULT_QP));
-        // encCfg.rcParams.rateControlMode = NV_ENC_PARAMS_RC_CONSTQP;
-        // encCfg.rcParams.constQP.qpInterP = XH_NVENV_DEFAULT_QP;
-        // encCfg.rcParams.constQP.qpInterB = XH_NVENV_DEFAULT_QP;
-        // encCfg.rcParams.constQP.qpIntra = XH_NVENV_DEFAULT_QP;
-        encCfg.rcParams.rateControlMode = NV_ENC_PARAMS_RC_VBR;
-        encCfg.rcParams.averageBitRate = 0;
-        encCfg.rcParams.maxBitRate = 0;
-        encCfg.rcParams.targetQuality = 35;
+        encCfg.rcParams.rateControlMode = NV_ENC_PARAMS_RC_CONSTQP;
+        encCfg.rcParams.constQP.qpInterP = XH_NVENV_DEFAULT_QP;
+        encCfg.rcParams.constQP.qpInterB = XH_NVENV_DEFAULT_QP;
+        encCfg.rcParams.constQP.qpIntra = XH_NVENV_DEFAULT_QP;
+        //encCfg.rcParams.rateControlMode = NV_ENC_PARAMS_RC_VBR;
+        //encCfg.rcParams.averageBitRate = 0;
+        //encCfg.rcParams.maxBitRate = 0;
+        //encCfg.rcParams.targetQuality = 30;
         rc_set = 1;
     }
 
     encCfg.encodeCodecConfig.h264Config.chromaFormatIDC = 1;
     encCfg.encodeCodecConfig.h264Config.idrPeriod = NVENC_INFINITE_GOPLENGTH;
     encCfg.encodeCodecConfig.h264Config.repeatSPSPPS = 1;
+    encCfg.encodeCodecConfig.h264Config.disableSPSPPS = 0;
 
     g_memset(&createEncodeParams, 0, sizeof(createEncodeParams));
     createEncodeParams.version = NV_ENC_INITIALIZE_PARAMS_VER;
@@ -307,8 +308,6 @@ xorgxrdp_helper_nvenc_encode(struct enc_info *ei, int tex,
     NVENCSTATUS nv_error;
     int rv;
 
-    (void) tex;
-
     g_memset(&picParams, 0, sizeof(picParams));
     picParams.version = NV_ENC_PIC_PARAMS_VER;
     picParams.inputBuffer = ei->mappedResource;
@@ -319,12 +318,10 @@ xorgxrdp_helper_nvenc_encode(struct enc_info *ei, int tex,
     picParams.inputTimeStamp = ei->frameCount;
     picParams.pictureStruct = NV_ENC_PIC_STRUCT_FRAME;
     picParams.encodePicFlags = NV_ENC_PIC_FLAG_OUTPUT_SPSPPS;
-    if (xrdp_invalidate > 0) {
+    if (xrdp_invalidate == 1 || ei->frameCount == 0) {
         picParams.encodePicFlags |= NV_ENC_PIC_FLAG_FORCEIDR;
-        ++xrdp_invalidate;
-        if (xrdp_invalidate == 5) {
-            xrdp_invalidate = 0;
-        }
+        xrdp_invalidate = 0;
+        LOGLN((LOG_LEVEL_INFO, LOGS "Forcing NVENC H264 IDR SPSPPS for frame id: %d", LOGP, ei->frameCount));
     }
     nv_error = g_enc_funcs.nvEncEncodePicture(ei->enc, &picParams);
     rv = 1;
@@ -351,4 +348,3 @@ xorgxrdp_helper_nvenc_encode(struct enc_info *ei, int tex,
     }
     return rv;
 }
-
