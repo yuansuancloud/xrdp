@@ -765,7 +765,24 @@ xrdp_egfx_open_response(intptr_t id, int chan_id, int creation_status)
 static int
 xrdp_egfx_close_response(intptr_t id, int chan_id)
 {
+    struct xrdp_process *process;
+    struct xrdp_mm *mm;
+    struct display_size_description *description;
+
     LOG(LOG_LEVEL_TRACE, "xrdp_egfx_close_response:");
+
+    process = (struct xrdp_process *) id;
+    mm = process->wm->mm;
+
+    if (mm->resize_queue == 0 || mm->resize_queue->count <= 0) {
+        return 0;
+    }
+    description = (struct display_size_description*)list_get_item(mm->resize_queue, 0);
+    if (description->state == WMRZ_EGFX_DELETING) {
+        LOG(LOG_LEVEL_INFO, "xrdp_egfx_close_response: egfx deleted.");
+        description->state = WRMZ_EGFX_DELETED;
+        g_set_wait_obj(mm->resize_state_machine);
+    }
     return 0;
 }
 
@@ -799,11 +816,32 @@ xrdp_egfx_data(intptr_t id, int chan_id, char *data, int bytes)
     int error;
     struct stream ls;
     struct xrdp_process *process;
+    struct xrdp_wm *wm;
+    struct xrdp_mm *mm;
     struct xrdp_egfx *egfx;
 
     LLOGLN(10, ("xrdp_egfx_data:"));
+
     process = (struct xrdp_process *) id;
-    egfx = process->wm->mm->egfx;
+    if (process == NULL) {
+        return 0;
+    }
+
+    wm = process->wm;
+    if (wm == NULL) {
+        return 0;
+    }
+
+    mm = wm->mm;
+    if (mm == NULL) {
+        return 0;
+    }
+
+    egfx = mm->egfx;
+    if (egfx == NULL) {
+        return 0;
+    }
+
     if (egfx->s == NULL)
     {
         g_memset(&ls, 0, sizeof(ls));
@@ -866,6 +904,10 @@ int
 xrdp_egfx_delete(struct xrdp_egfx *egfx)
 {
     LOG(LOG_LEVEL_INFO, "xrdp_egfx_delete:");
+
+    if (egfx == 0) {
+        return 0;
+    }
 
     int error = xrdp_egfx_send_delete_surface(egfx, egfx->surface_id);
     if (error != 0)

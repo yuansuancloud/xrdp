@@ -46,6 +46,22 @@ struct monitor_info
     int flags;
 };
 
+enum display_resize_state {
+    WMRZ_QUEUED = 0,
+    WMRZ_ENCODER_DELETE,
+    WMRZ_EGFX_DELETE,
+    WMRZ_EGFX_DELETING,
+    WRMZ_EGFX_DELETED,
+    WMRZ_XRDP_CORE_RESIZE,
+    WMRZ_SERVER_VERSION_MESSAGE,
+    WMRZ_SERVER_MONITOR_RESIZE,
+    WMRZ_EGFX_INITIALIZE,
+    WMRZ_EGFX_INITALIZING,
+    WMRZ_EGFX_INITIALIZED,
+    WMRZ_COMPLETE,
+    WMRZ_ERROR
+};
+
 struct display_size_description
 {
     int monitorCount; /* number of monitors detected (max = 16) */
@@ -53,6 +69,7 @@ struct display_size_description
     struct monitor_info minfo_wm[XRDP_MAXIMUM_MONITORS]; /* client monitor data, non-negative values */
     int session_width;
     int session_height;
+    enum display_resize_state state;
 };
 
 /**
