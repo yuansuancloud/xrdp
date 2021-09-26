@@ -1529,6 +1529,12 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct display_size_desc
                 mm->egfx_up = 0;
                 description->state = WMRZ_EGFX_DELETING;
             }
+            else
+            {
+                description->state = WMRZ_XRDP_CORE_RESIZE;
+            }
+#else
+            description->state = WMRZ_XRDP_CORE_RESIZE;
 #endif
             break;
         //Not processed here. Processed xrdp_egfx_close_response
@@ -1607,8 +1613,14 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct display_size_desc
 #if defined(XRDP_X264) || defined(XRDP_NVENC)
             if (error == 0 && mm->egfx == NULL && mm->egfx_up == 0) {
                 egfx_initialize(mm);
+                description->state = WMRZ_EGFX_INITALIZING;
             }
-            description->state = WMRZ_EGFX_INITALIZING;
+            else
+            {
+                description->state = WMRZ_EGFX_INITIALIZED;
+            }
+#else
+            description->state = WMRZ_EGFX_INITIALIZED;
 #endif
             break;
         //Not processed here. Processed xrdp_mm_egfx_caps_advertise
