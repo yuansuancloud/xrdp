@@ -1519,7 +1519,6 @@ process_dynamic_monitor_description(struct xrdp_wm *wm, struct display_size_desc
         LOG(LOG_LEVEL_INFO, "process_dynamic_monitor_description: Not resizing. Already this size. (w: %d x h: %d)", description->session_width, description->session_height);
         advance_resize_state_machine(mm->resize_state_machine, description, WMRZ_COMPLETE);
     }
-    LOG(LOG_LEVEL_INFO, "process_dynamic_monitor_description: Processing resize to: %d x %d. State is %d.", description->session_width, description->session_height, description->state);
 
     switch (description->state) {
         case WMRZ_QUEUED:
