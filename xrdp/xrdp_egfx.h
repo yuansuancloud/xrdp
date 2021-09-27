@@ -125,6 +125,8 @@ struct xrdp_egfx
 int
 xrdp_egfx_create(struct xrdp_mm *mm, struct xrdp_egfx **egfx);
 int
+xrdp_egfx_client_shutdown(struct xrdp_egfx *egfx);
+int
 xrdp_egfx_delete(struct xrdp_egfx *egfx);
 int
 xrdp_egfx_send_create_surface(struct xrdp_egfx *egfx, int surface_id,

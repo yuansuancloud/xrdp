@@ -318,7 +318,7 @@ xorgxrdp_helper_nvenc_encode(struct enc_info *ei, int tex,
     picParams.inputTimeStamp = ei->frameCount;
     picParams.pictureStruct = NV_ENC_PIC_STRUCT_FRAME;
     picParams.encodePicFlags = NV_ENC_PIC_FLAG_OUTPUT_SPSPPS;
-    if (xrdp_invalidate == 1 || ei->frameCount == 0) {
+    if (xrdp_invalidate == 1 || ei->frameCount <= 5) {
         picParams.encodePicFlags |= NV_ENC_PIC_FLAG_FORCEIDR;
         xrdp_invalidate = 0;
         LOGLN((LOG_LEVEL_INFO, LOGS "Forcing NVENC H264 IDR SPSPPS for frame id: %d", LOGP, ei->frameCount));
