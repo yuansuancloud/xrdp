@@ -1238,7 +1238,6 @@ process_server_paint_rect_shmem_ex(struct mod *amod, struct stream *s)
     }
     if (bmpdata != 0)
     {
-
         rv = amod->server_paint_rects(amod, num_drects, ldrects,
                                       num_crects, lcrects,
                                       bmpdata, width, height,
@@ -1516,6 +1515,12 @@ lib_mod_process_message(struct mod *mod, struct stream *s)
     int type;
     char *phold;
 
+    int width;
+    int height;
+    int magic;
+    int con_id;
+    int mon_id;
+
     LOG_DEVEL(LOG_LEVEL_TRACE, "lib_mod_process_message:");
     rv = 0;
     if (rv == 0)
@@ -1574,6 +1579,33 @@ lib_mod_process_message(struct mod *mod, struct stream *s)
                     break;
                 }
 
+                s->p = phold + len;
+            }
+        }
+        else if (type == 100) // xorgxrdp_helper commands.
+        {
+            for (index = 0; index < num_orders; index++)
+            {
+                phold = s->p;
+                in_uint16_le(s, type);
+                in_uint16_le(s, len);
+                switch (type)
+                {
+                    case 1: // xorgxrdp_helper_x11_delete_all_pixmaps
+                        // No-op for now.
+                        break;
+                    case 2: // xorgxrdp_helper_x11_create_pixmap
+                        in_uint16_le(s, width);
+                        in_uint16_le(s, height);
+                        in_uint32_le(s, magic);
+                        in_uint32_le(s, con_id);
+                        in_uint32_le(s, mon_id);
+
+                        LOG(LOG_LEVEL_TRACE, "Received xorgxrdp_helper_x11_create_pixmap command. width: %d, height: %d, magic: %d, con_id %d, mon_id %d", 
+                                width, height, magic, con_id, mon_id);
+                        mod->server_reset(mod, width, height, 0);
+                        break;
+                }
                 s->p = phold + len;
             }
         }

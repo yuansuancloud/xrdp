@@ -760,6 +760,9 @@ xrdp_egfx_open_response(intptr_t id, int chan_id, int creation_status)
     return 0;
 }
 
+int
+advance_resize_state_machine(tbus resize_state_machine, struct display_size_description *description, enum display_resize_state new_state);
+
 /******************************************************************************/
 /* from client */
 static int
@@ -779,9 +782,8 @@ xrdp_egfx_close_response(intptr_t id, int chan_id)
     }
     description = (struct display_size_description*)list_get_item(mm->resize_queue, 0);
     if (description->state == WMRZ_EGFX_CONN_CLOSING) {
-        LOG(LOG_LEVEL_INFO, "xrdp_egfx_close_response: egfx deleted.");
-        description->state = WMRZ_EGFX_CONN_CLOSED;
-        g_set_wait_obj(mm->resize_state_machine);
+        LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_close_response: egfx deleted.");
+        advance_resize_state_machine(mm->resize_state_machine, description, WMRZ_EGFX_CONN_CLOSED);
     }
     return 0;
 }
@@ -800,7 +802,7 @@ xrdp_egfx_data_first(intptr_t id, int chan_id, char *data, int bytes,
     egfx = process->wm->mm->egfx;
     if (egfx->s != NULL)
     {
-        LOG(LOG_LEVEL_INFO, "xrdp_egfx_data_first: Error! Stream is not working on initial data received!");
+        LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_data_first: Error! Stream is not working on initial data received!");
     }
     make_stream(egfx->s);
     init_stream(egfx->s, total_bytes);
@@ -901,30 +903,49 @@ xrdp_egfx_create(struct xrdp_mm *mm, struct xrdp_egfx **egfx)
 
 /******************************************************************************/
 int
-xrdp_egfx_client_shutdown(struct xrdp_egfx *egfx) {
+xrdp_egfx_shutdown_delete_surface(struct xrdp_egfx *egfx) {
     int error;
 
-    LOG(LOG_LEVEL_TRACE, "xrdp_egfx_client_shutdown:");
+    LOG(LOG_LEVEL_TRACE, "xrdp_egfx_shutdown_delete_surface:");
 
     if (egfx == 0) {
-        LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_client_shutdown: EGFX is already null!");
+        LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_shutdown_delete_surface: EGFX is already null!");
         return 0;
     }
 
     error = xrdp_egfx_send_delete_surface(egfx, egfx->surface_id);
     if (error != 0)
     {
-        LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_client_shutdown: xrdp_egfx_send_delete_surface failed %d", error);
+        LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_shutdown_delete_surface: xrdp_egfx_send_delete_surface failed %d", error);
+    }
+    return error;
+}
+
+/******************************************************************************/
+int
+xrdp_egfx_shutdown_close_connection(struct xrdp_egfx *egfx) {
+    int error;
+
+    LOG(LOG_LEVEL_TRACE, "xrdp_egfx_shutdown_close_connection:");
+
+    if (egfx == 0) {
+        LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_shutdown_close_connection: EGFX is already null!");
+        return 0;
+    }
+
+    error = libxrdp_drdynvc_close(egfx->session, egfx->channel_id);
+    if (error != 0)
+    {
+        LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_shutdown_close_connection: libxrdp_drdynvc_close failed %d", error);
         return error;
     }
-    error = libxrdp_drdynvc_close(egfx->session, egfx->channel_id);
 
     return error;
 }
 
 /******************************************************************************/
 int
-xrdp_egfx_delete(struct xrdp_egfx *egfx)
+xrdp_egfx_shutdown_delete(struct xrdp_egfx *egfx)
 {
     int error;
 
@@ -935,9 +956,43 @@ xrdp_egfx_delete(struct xrdp_egfx *egfx)
         return 0;
     }
 
-    error = xrdp_egfx_client_shutdown(egfx);
-
     g_free(egfx);
+
+    return error;
+}
+
+/******************************************************************************/
+int
+xrdp_egfx_shutdown_full(struct xrdp_egfx *egfx) {
+    int error;
+
+    LOG(LOG_LEVEL_TRACE, "xrdp_egfx_shutdown_full:");
+
+    if (egfx == 0) {
+        LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_shutdown_full: EGFX is already null!");
+        return 0;
+    }
+
+    error = xrdp_egfx_shutdown_delete_surface(egfx);
+    if (error != 0)
+    {
+        LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_shutdown_full: xrdp_egfx_shutdown_delete_surface failed %d", error);
+        return error;
+    }
+
+    error = xrdp_egfx_shutdown_close_connection(egfx);
+    if (error != 0)
+    {
+        LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_shutdown_full: xrdp_egfx_shutdown_close_connection failed %d", error);
+        return error;
+    }
+
+    error = xrdp_egfx_shutdown_delete(egfx);
+    if (error != 0)
+    {
+        LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_shutdown_full: xrdp_egfx_shutdown_delete failed %d", error);
+        return error;
+    }
 
     return error;
 }

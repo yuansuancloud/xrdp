@@ -75,13 +75,13 @@ xorg_process_message_61(struct xorgxrdp_info *xi, struct stream *s)
     in_uint16_le(s, width);
     in_uint16_le(s, height);
 
-    if (xi->resizing == 1) {
-        if (xrdp_invalidate == 1 && frame_id == 0) {
+    if (xi->resizing == 3) {
+        if (xrdp_invalidate > 0 && frame_id == 1) {
             // Let it through. We are no longer resizing.
-            LOGLN((LOG_LEVEL_INFO, LOGS "Invalidate received and processing frame ID 0. Unblocking encoder.", LOGP));
+            LOGLN((LOG_LEVEL_DEBUG, LOGS "Invalidate received and processing frame ID 1. Unblocking encoder.", LOGP));
             xi->resizing = 0;
         } else {
-            LOGLN((LOG_LEVEL_INFO, LOGS "Blocked Incoming Frame ID %d", LOGP, frame_id));
+            LOGLN((LOG_LEVEL_DEBUG, LOGS "Blocked Incoming Frame ID %d", LOGP, frame_id));
             return 0;
         }
     }
@@ -173,7 +173,7 @@ xorg_process_message(struct xorgxrdp_info *xi, struct stream *s)
             }
             s->p = phold + size;
         }
-        if (xi->resizing == 1) {
+        if (xi->resizing > 0) {
             return 0;
         }
     }
@@ -184,14 +184,17 @@ xorg_process_message(struct xorgxrdp_info *xi, struct stream *s)
             phold = s->p;
             in_uint16_le(s, type);
             in_uint16_le(s, size);
-            LOGLN((LOG_LEVEL_INFO, LOGS "100 type %d size %d",
+            LOGLN((LOG_LEVEL_DEBUG, LOGS "100 type %d size %d",
                    LOGP, type, size));
             switch (type)
             {
                 case 1:
-                    LOGLN((LOG_LEVEL_INFO, LOGS "calling "
+                    LOGLN((LOG_LEVEL_DEBUG, LOGS "calling "
                            "xorgxrdp_helper_x11_delete_all_pixmaps", LOGP));
                     xorgxrdp_helper_x11_delete_all_pixmaps();
+                    if (xi->resizing == 1) {
+                        xi->resizing = 2;
+                    }
                     break;
                 case 2:
                     in_uint16_le(s, width);
@@ -199,15 +202,17 @@ xorg_process_message(struct xorgxrdp_info *xi, struct stream *s)
                     in_uint32_le(s, magic);
                     in_uint32_le(s, con_id);
                     in_uint32_le(s, mon_id);
-                    LOGLN((LOG_LEVEL_INFO, LOGS "calling "
+                    LOGLN((LOG_LEVEL_DEBUG, LOGS "calling "
                            "xorgxrdp_helper_x11_create_pixmap", LOGP));
                     xorgxrdp_helper_x11_create_pixmap(width, height, magic,
                                                       con_id, mon_id);
+                    if (xi->resizing == 2) {
+                        xi->resizing = 3;
+                    }
                     break;
             }
             s->p = phold + size;
         }
-        return 0;
     }
     s->p = s->data;
     return trans_write_copy_s(xi->xrdp_trans, s);
@@ -245,7 +250,7 @@ xorg_data_in(struct trans* trans)
             s->p = s->data;
             if (xorg_process_message(xi, s) != 0)
             {
-                LOGLN((LOG_LEVEL_INFO, LOGS "xorg_process_message failed",
+                LOGLN((LOG_LEVEL_ERROR, LOGS "xorg_process_message failed",
                        LOGP));
                 return 1;
             }
@@ -271,10 +276,10 @@ xrdp_process_message(struct xorgxrdp_info *xi, struct stream *s)
     if (msg_type1 == 103) { // client message
         in_uint32_le(s, msg_type2);
         if (msg_type2 == 200) { // invalidate
-            LOGLN((LOG_LEVEL_INFO, LOGS "Invalidate found (len: %d, msg1: %d, msg2: %d)", LOGP, len, msg_type1, msg_type2));
-            xrdp_invalidate = 1;
+            LOGLN((LOG_LEVEL_DEBUG, LOGS "Invalidate found (len: %d, msg1: %d, msg2: %d)", LOGP, len, msg_type1, msg_type2));
+            ++xrdp_invalidate;
         } else if (msg_type2 == 300) { // resize
-            LOGLN((LOG_LEVEL_INFO, LOGS "Resize found (len: %d, msg1: %d, msg2: %d)", LOGP, len, msg_type1, msg_type2));
+            LOGLN((LOG_LEVEL_DEBUG, LOGS "Resize found (len: %d, msg1: %d, msg2: %d)", LOGP, len, msg_type1, msg_type2));
             xi->resizing = 1;
         }
     }
@@ -560,6 +565,8 @@ main(int argc, char **argv)
     LOGLN((LOG_LEVEL_INFO, LOGS "xorg_fd: %s", LOGP, g_getenv("XORGXRDP_XORG_FD")));
     xrdp_fd = g_atoi(g_getenv("XORGXRDP_XRDP_FD"));
     LOGLN((LOG_LEVEL_INFO, LOGS "xorg_fd: %s", LOGP, g_getenv("XORGXRDP_XRDP_FD")));
+
+    xi.resizing = 0;
 
     xi.xorg_trans = trans_create(TRANS_MODE_UNIX, 128 * 1024, 128 * 1024);
     xi.xorg_trans->sck = xorg_fd;

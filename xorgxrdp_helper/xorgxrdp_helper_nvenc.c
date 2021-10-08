@@ -1,4 +1,3 @@
-
 #if defined(HAVE_CONFIG_H)
 #include <config_ac.h>
 #endif
@@ -191,10 +190,6 @@ xorgxrdp_helper_nvenc_create_encoder(int width, int height, int tex,
         encCfg.rcParams.constQP.qpInterP = XH_NVENV_DEFAULT_QP;
         encCfg.rcParams.constQP.qpInterB = XH_NVENV_DEFAULT_QP;
         encCfg.rcParams.constQP.qpIntra = XH_NVENV_DEFAULT_QP;
-        //encCfg.rcParams.rateControlMode = NV_ENC_PARAMS_RC_VBR;
-        //encCfg.rcParams.averageBitRate = 0;
-        //encCfg.rcParams.maxBitRate = 0;
-        //encCfg.rcParams.targetQuality = 30;
         rc_set = 1;
     }
 
@@ -318,9 +313,9 @@ xorgxrdp_helper_nvenc_encode(struct enc_info *ei, int tex,
     picParams.inputTimeStamp = ei->frameCount;
     picParams.pictureStruct = NV_ENC_PIC_STRUCT_FRAME;
     picParams.encodePicFlags = NV_ENC_PIC_FLAG_OUTPUT_SPSPPS;
-    if (xrdp_invalidate == 1 || ei->frameCount <= 5) {
+    if (xrdp_invalidate > 0 || ei->frameCount == 0) {
         picParams.encodePicFlags |= NV_ENC_PIC_FLAG_FORCEIDR;
-        xrdp_invalidate = 0;
+        xrdp_invalidate = MAX(0, xrdp_invalidate - 1);
         LOGLN((LOG_LEVEL_INFO, LOGS "Forcing NVENC H264 IDR SPSPPS for frame id: %d", LOGP, ei->frameCount));
     }
     nv_error = g_enc_funcs.nvEncEncodePicture(ei->enc, &picParams);
