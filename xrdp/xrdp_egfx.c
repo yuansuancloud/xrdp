@@ -947,7 +947,7 @@ xrdp_egfx_shutdown_close_connection(struct xrdp_egfx *egfx) {
 int
 xrdp_egfx_shutdown_delete(struct xrdp_egfx *egfx)
 {
-    int error;
+    int error = 0;
 
     LOG(LOG_LEVEL_TRACE, "xrdp_egfx_delete:");
 
