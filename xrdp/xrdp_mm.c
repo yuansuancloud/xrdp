@@ -1117,8 +1117,8 @@ xrdp_mm_egfx_send_planar_bitmap(struct xrdp_mm *self,
             else
             {
                 comp_bytes = (int)(comp_s->end - comp_s->data);
-                LOG_DEVEL(LOG_LEVEL_TRACE, ("xrdp_mm_egfx_send_planar_bitmap: lines %d "
-                       "comp_bytes %d", lines, comp_bytes));
+                LOG_DEVEL(LOG_LEVEL_TRACE, "xrdp_mm_egfx_send_planar_bitmap: lines %d "
+                       "comp_bytes %d", lines, comp_bytes);
                 gfx_rect.x1 = xindex;
                 gfx_rect.y1 = yindex;
                 gfx_rect.x2 = xindex + bwidth;
