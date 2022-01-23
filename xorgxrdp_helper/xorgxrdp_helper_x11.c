@@ -1,4 +1,3 @@
-
 #if defined(HAVE_CONFIG_H)
 #include <config_ac.h>
 #endif
@@ -31,45 +30,6 @@ static Screen *g_screen = NULL;
 static Window g_root_window = None;
 static Visual *g_vis = NULL;
 static GC g_gc;
-
-//#undef XRDP_NVENC
-
-#if defined(XRDP_NVENC)
-
-#include "xorgxrdp_helper_nvenc.h"
-
-/*****************************************************************************/
-static int
-xorgxrdp_helper_encoder_init(void)
-{
-    return xorgxrdp_helper_nvenc_init();
-}
-
-/*****************************************************************************/
-static int
-xorgxrdp_helper_encoder_delete_encoder(struct enc_info *ei)
-{
-    return xorgxrdp_helper_nvenc_delete_encoder(ei);
-}
-
-/*****************************************************************************/
-static int
-xorgxrdp_helper_encoder_create_encoder(int width, int height, int enc_texture,
-                                       int tex_format, struct enc_info **ei)
-{
-    return xorgxrdp_helper_nvenc_create_encoder(width, height, enc_texture,
-                                                tex_format, ei);
-}
-
-/*****************************************************************************/
-static int
-xorgxrdp_helper_encoder_encode(struct enc_info *ei, int enc_texture,
-                               void *cdata, int *cdata_bytes)
-{
-    return xorgxrdp_helper_nvenc_encode(ei, enc_texture, cdata, cdata_bytes);
-}
-
-#else
 
 struct enc_info
 {
@@ -105,8 +65,6 @@ xorgxrdp_helper_encoder_encode(struct enc_info *ei, int enc_texture,
 {
     return 1;
 }
-
-#endif
 
 #if defined(XRDP_GLX)
 

@@ -32,10 +32,6 @@
 #include "rfxcodec_encode.h"
 #endif
 
-#ifdef XRDP_NVENC
-#include "xrdp_encoder_nvenc.h"
-#endif
-
 #ifdef XRDP_X264
 #include "xrdp_encoder_x264.h"
 #endif
@@ -102,11 +98,9 @@ xrdp_encoder_create(struct xrdp_mm *mm)
             (12 << 24) | (66 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
         self->gfx = 1;
-// #if defined(XRDP_NVENC)
-//         self->codec_handle = xrdp_encoder_nvenc_create();
-// #elif defined(XRDP_X264)
-//         self->codec_handle = xrdp_encoder_x264_create();
-// #endif
+#if defined(XRDP_X264)
+         self->codec_handle = xrdp_encoder_x264_create();
+#endif
     }
     else if (mm->egfx_flags & 2)
     {
@@ -160,11 +154,9 @@ xrdp_encoder_create(struct xrdp_mm *mm)
             /* XRDP_nv12 */
             (12 << 24) | (64 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
-// #if defined(XRDP_NVENC)
-//         self->codec_handle = xrdp_encoder_nvenc_create();
-// #elif defined(XRDP_X264)
-//         self->codec_handle = xrdp_encoder_x264_create();
-// #endif
+#if defined(XRDP_X264)
+         self->codec_handle = xrdp_encoder_x264_create();
+#endif
     }
     else
     {
@@ -238,14 +230,10 @@ xrdp_encoder_delete(struct xrdp_encoder *self)
         rfxcodec_encode_destroy(self->codec_handle);
     }
 #endif
-#if defined(XRDP_NVENC) || defined(XRDP_X264)
+#if defined(XRDP_X264)
     else if (self->process_enc == process_enc_h264)
     {
-#if defined(XRDP_NVENC)
-        xrdp_encoder_nvenc_delete(self->codec_handle);
-#elif defined(XRDP_X264)
         xrdp_encoder_x264_delete(self->codec_handle);
-#endif
     }
 #endif
     /* destroy wait objects used for signalling */
@@ -551,7 +539,7 @@ static int n_save_data(const char* data, int data_size, int width, int height)
 }
 #endif
 
-#if defined(XRDP_NVENC) || defined(XRDP_X264)
+#if defined(XRDP_X264)
 
 /*****************************************************************************/
 /* called from encoder thread */
@@ -577,8 +565,8 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     int comp_bytes_pre;
     int enc_done_flags;
 
-    LOG_DEVEL(LOG_LEVEL_TRACE, "process_enc_x264:");
-    LOG_DEVEL(LOG_LEVEL_TRACE, "process_enc_x264: num_crects %d num_drects %d",
+    LOG(LOG_LEVEL_INFO, "process_enc_x264:");
+    LOG(LOG_LEVEL_INFO, "process_enc_x264: num_crects %d num_drects %d",
            enc->num_crects, enc->num_drects);
 
     fifo_processed = self->fifo_processed;
@@ -654,23 +642,30 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
         comp_bytes_pre = 4 + 4 + 2 + 2 + 2 + 2 + 2 + rcount * 8 + 4;
         enc_done_flags = 0;
     }
-    out_data_bytes = ((int *) (enc->data))[0];
-    g_memcpy(s->p, enc->data + 4, out_data_bytes);
     error = 0;
-#if 0
-#if defined(XRDP_NVENC)
-    error = xrdp_encoder_nvenc_encode(self->codec_handle, 0,
-                                      enc->width, enc->height, 0,
-                                      enc->data,
-                                      s->p, &out_data_bytes);
-#elif defined(XRDP_X264)
-    error = xrdp_encoder_x264_encode(self->codec_handle, 0,
-                                     enc->width, enc->height, 0,
-                                     enc->data,
-                                     s->p, &out_data_bytes);
+    if (enc->flags & 1)
+    {
+        /* already compressed */
+        uint8_t *ud = (uint8_t *) (enc->data);
+        int cbytes = ud[0] | (ud[1] << 8) | (ud[2] << 16) | (ud[3] << 24);
+        if ((cbytes < 1) || (cbytes > out_data_bytes))
+        {
+            LOG(LOG_LEVEL_INFO, "process_enc_h264: bad h264 bytes %d", cbytes);
+            g_free(out_data);
+            return 0;
+        }
+        out_data_bytes = cbytes;
+        g_memcpy(s->p, enc->data + 4, out_data_bytes);
+    }
+    else
+    {
+#if defined(XRDP_X264)
+        error = xrdp_encoder_x264_encode(self->codec_handle, 0,
+                                         enc->width, enc->height, 0,
+                                         enc->data,
+                                         s->p, &out_data_bytes);
 #endif
-#endif
-
+    }
     LOG_DEVEL(LOG_LEVEL_TRACE, "process_enc_h264: xrdp_encoder_x264_encode rv %d "
            "out_data_bytes %d width %d height %d",
            error, out_data_bytes, enc->width, enc->height);
