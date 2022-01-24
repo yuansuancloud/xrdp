@@ -1149,6 +1149,8 @@ send_suppress_output(struct mod *mod, int suppress,
 static int
 process_server_paint_rect_shmem_ex(struct mod *amod, struct stream *s)
 {
+    LOG(LOG_LEVEL_TRACE, "process_server_paint_rect_shmem_ex:");
+
     int num_drects;
     int num_crects;
     int flags;
@@ -1235,7 +1237,6 @@ process_server_paint_rect_shmem_ex(struct mod *amod, struct stream *s)
     }
     if (bmpdata != 0)
     {
-
         rv = amod->server_paint_rects(amod, num_drects, ldrects,
                                       num_crects, lcrects,
                                       bmpdata, width, height,

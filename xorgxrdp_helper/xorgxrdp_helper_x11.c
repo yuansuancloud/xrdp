@@ -31,6 +31,78 @@ static Window g_root_window = None;
 static Visual *g_vis = NULL;
 static GC g_gc;
 
+#if defined(XRDP_NVENC)
+
+#include "xorgxrdp_helper_nvenc.h"
+
+/*****************************************************************************/
+static int
+xorgxrdp_helper_encoder_init(void)
+{
+    return xorgxrdp_helper_nvenc_init();
+}
+
+/*****************************************************************************/
+static int
+xorgxrdp_helper_encoder_delete_encoder(struct enc_info *ei)
+{
+    return xorgxrdp_helper_nvenc_delete_encoder(ei);
+}
+
+/*****************************************************************************/
+static int
+xorgxrdp_helper_encoder_create_encoder(int width, int height, int enc_texture,
+                                       int tex_format, struct enc_info **ei)
+{
+    return xorgxrdp_helper_nvenc_create_encoder(width, height, enc_texture,
+                                                tex_format, ei);
+}
+
+/*****************************************************************************/
+static int
+xorgxrdp_helper_encoder_encode(struct enc_info *ei, int enc_texture,
+                               void *cdata, int *cdata_bytes)
+{
+    return xorgxrdp_helper_nvenc_encode(ei, enc_texture, cdata, cdata_bytes);
+}
+
+#elif defined(XRDP_YAMI)
+
+#include "xorgxrdp_helper_yami.h"
+
+/*****************************************************************************/
+static int
+xorgxrdp_helper_encoder_init(void)
+{
+    return xorgxrdp_helper_yami_init();
+}
+
+/*****************************************************************************/
+static int
+xorgxrdp_helper_encoder_delete_encoder(struct enc_info *ei)
+{
+    return xorgxrdp_helper_yami_delete_encoder(ei);
+}
+
+/*****************************************************************************/
+static int
+xorgxrdp_helper_encoder_create_encoder(int width, int height, int enc_texture,
+                                       int tex_format, struct enc_info **ei)
+{
+    return xorgxrdp_helper_yami_create_encoder(width, height, enc_texture,
+                                               tex_format, ei);
+}
+
+/*****************************************************************************/
+static int
+xorgxrdp_helper_encoder_encode(struct enc_info *ei, int enc_texture,
+                               void *cdata, int *cdata_bytes)
+{
+    return xorgxrdp_helper_yami_encode(ei, enc_texture, cdata, cdata_bytes);
+}
+
+#else
+
 struct enc_info
 {
     int pad0;
@@ -65,6 +137,8 @@ xorgxrdp_helper_encoder_encode(struct enc_info *ei, int enc_texture,
 {
     return 1;
 }
+
+#endif
 
 #if defined(XRDP_GLX)
 
@@ -1162,6 +1236,9 @@ xorgxrdp_helper_x11_encode_pixmap(int width, int height, int mon_id,
     mi = g_mons + (mon_id & 0xF);
     if ((width != mi->width) || (height != mi->height))
     {
+        LOGLN((LOG_LEVEL_ERROR, LOGS "error width %d should be %d "
+               "height %d should be %d", LOGP,
+               width, mi->width, height, mi->height));
         return 1;
     }
     /* rgb to yuv */
@@ -1179,6 +1256,8 @@ xorgxrdp_helper_x11_encode_pixmap(int width, int height, int mon_id,
                                 num_crects, crects, width, height);
     if (vertices == NULL)
     {
+        LOGLN((LOG_LEVEL_ERROR, LOGS "error get_vertices failed num_crects %d",
+               LOGP, num_crects));
         return 1;
     }
     glGenVertexArrays(1, &vao);

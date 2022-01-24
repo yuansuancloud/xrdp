@@ -495,7 +495,7 @@ internal_log_config_copy(struct log_config *dest, const struct log_config *src)
 {
     int i;
 
-    if (src == NULL) {
+    if (src == NULL || dest == NULL) {
         return;
     }
 
@@ -514,6 +514,12 @@ internal_log_config_copy(struct log_config *dest, const struct log_config *src)
     dest->dump_on_start = src->dump_on_start;
     if (src->per_logger_level == NULL) {
        return;
+    }
+    if (dest->per_logger_level == NULL) {
+        dest->per_logger_level = list_create();
+        if (dest->per_logger_level != NULL) {
+            dest->per_logger_level->auto_free = 1;
+        }
     }
     for (i = 0; i < src->per_logger_level->count; ++i)
     {
