@@ -94,8 +94,10 @@ xrdp_encoder_create(struct xrdp_mm *mm)
         self->in_codec_mode = 1;
         client_info->capture_code = 3;
         client_info->capture_format =
+            /* XRDP_yuv444_709fr */
+            (32 << 24) | (67 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
             /* XRDP_nv12_709fr */
-            (12 << 24) | (66 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
+            //(12 << 24) | (66 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
         self->gfx = 1;
 #if defined(XRDP_X264)
@@ -151,8 +153,10 @@ xrdp_encoder_create(struct xrdp_mm *mm)
         self->in_codec_mode = 1;
         client_info->capture_code = 3;
         client_info->capture_format =
-            /* XRDP_nv12 */
-            (12 << 24) | (64 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
+            ///* XRDP_nv12 */
+            //(12 << 24) | (64 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
+            /* XRDP_yuv444_709fr */
+            (32 << 24) | (67 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
 #if defined(XRDP_X264)
          self->codec_handle = xrdp_encoder_x264_create();
@@ -565,8 +569,8 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     int comp_bytes_pre;
     int enc_done_flags;
 
-    LOG(LOG_LEVEL_INFO, "process_enc_x264:");
-    LOG(LOG_LEVEL_INFO, "process_enc_x264: num_crects %d num_drects %d",
+    LOG(LOG_LEVEL_DEBUG, "process_enc_x264:");
+    LOG(LOG_LEVEL_DEBUG, "process_enc_x264: num_crects %d num_drects %d",
            enc->num_crects, enc->num_drects);
 
     fifo_processed = self->fifo_processed;
