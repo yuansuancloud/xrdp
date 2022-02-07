@@ -519,6 +519,7 @@ xorgxrdp_helper_setup_log(void)
     logconfig.program_name = "xorgxrdp_helper";
     logconfig.enable_console = 0;
     logconfig.enable_pid = 1;
+    logconfig.per_logger_level = NULL;
     error = log_start_from_param(&logconfig);
 
     return error;
