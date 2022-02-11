@@ -1275,11 +1275,11 @@ xrdp_mm_egfx_caps_advertise(void* user, int caps_count,
         if (self->resize_queue != 0 && self->resize_queue > 0) {
             description = (struct display_size_description*)list_get_item(self->resize_queue, 0);
             if (description->state == WMRZ_EGFX_INITALIZING) {
-                LOG(LOG_LEVEL_INFO, "xrdp_mm_egfx_caps_advertise: egfx created.");
                 description->state = WMRZ_EGFX_INITIALIZED;
                 g_set_wait_obj(self->resize_state_machine);
             }
         }
+        LOG(LOG_LEVEL_INFO, "xrdp_mm_egfx_caps_advertise: egfx created.");
         if (self->gfx_delay_autologin)
         {
             self->gfx_delay_autologin = 0;
@@ -4186,6 +4186,27 @@ server_reset(struct xrdp_mod *mod, int width, int height, int bpp)
         return 0;
     }
 
+    // bpp of zero is impossible.
+    // This is a signal from xup that
+    // It is finished resizing.
+    if (bpp == 0) {
+        if (mm == 0) {
+            return 1;
+        }
+        if (mm->resize_queue == 0 || mm->resize_queue->count <= 0) {
+            mm->mod->mod_server_monitor_full_invalidate(mm->mod, width, height);
+            return 0;
+        }
+        description = (struct display_size_description*)list_get_item(mm->resize_queue, 0);
+        if (description->state == WMRZ_SERVER_MONITOR_MESSAGE_PROCESSING) {
+            LOG(LOG_LEVEL_INFO, "server_reset: Advancing server monitor resized.");
+            advance_resize_state_machine(mm->resize_state_machine, description, WMRZ_SERVER_MONITOR_MESSAGE_PROCESSED);
+        } else if (description->state == WMRZ_QUEUED || (description->session_height == 0 && description->session_width == 0)) {
+            mm->mod->mod_server_monitor_full_invalidate(mm->mod, width, height);
+        }
+        return 0;
+    }
+
     /* if same (and only one monitor on client) don't need to do anything */
     if (wm->client_info->width == width &&
             wm->client_info->height == height &&
@@ -4195,23 +4216,7 @@ server_reset(struct xrdp_mod *mod, int width, int height, int bpp)
         return 0;
     }
 
-    // bpp of zero is impossible.
-    // This is a signal from xup that
-    // It is finished resizing.
-    if (bpp == 0) {
-        if (mm == 0) {
-            return 1;
-        }
-        if (mm->resize_queue == 0 || mm->resize_queue->count <= 0) {
-            return 0;
-        }
-        description = (struct display_size_description*)list_get_item(mm->resize_queue, 0);
-        if (description->state == WMRZ_SERVER_MONITOR_MESSAGE_PROCESSING) {
-            LOG(LOG_LEVEL_INFO, "server_reset: Advancing server monitor resized.");
-            advance_resize_state_machine(mm->resize_state_machine, description, WMRZ_SERVER_MONITOR_MESSAGE_PROCESSED);
-        }
-        return 0;
-    }
+    LOG(LOG_LEVEL_INFO, "server_reset: Actually resetting the server.");
 
     /* reset lib, client_info gets updated in libxrdp_reset */
     if (libxrdp_reset(wm->session, width, height, bpp) != 0)

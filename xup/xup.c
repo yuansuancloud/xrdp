@@ -260,7 +260,7 @@ lib_mod_connect(struct mod *mod)
         error = send_server_monitor_resize(mod, s, mod->width, mod->height, mod->bpp);
     }
 
-    if (error == 0)
+    if (getenv("XRDP_USE_HELPER") == NULL && error == 0)
     {
         error = send_server_monitor_full_invalidate(mod, s, mod->width, mod->height);
     }
