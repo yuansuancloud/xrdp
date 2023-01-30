@@ -28,6 +28,7 @@
 #include "xrdp_constants.h"
 #include "fifo.h"
 #include "guid.h"
+#include "xrdp_client_info.h"
 
 #define MAX_NR_CHANNELS 16
 #define MAX_CHANNEL_NAME 16
@@ -329,7 +330,9 @@ enum display_resize_state
     WMRZ_EGFX_CONN_CLOSED,
     WRMZ_EGFX_DELETE,
     WMRZ_SERVER_MONITOR_RESIZE,
-    WMRZ_SERVER_VERSION_MESSAGE,
+    WMRZ_SERVER_VERSION_MESSAGE_START,
+    WMRZ_SERVER_MONITOR_MESSAGE_PROCESSING,
+    WMRZ_SERVER_MONITOR_MESSAGE_PROCESSED,
     WMRZ_XRDP_CORE_RESIZE,
     WMRZ_EGFX_INITIALIZE,
     WMRZ_EGFX_INITALIZING,
@@ -348,7 +351,12 @@ enum display_resize_state
      (status) == WMRZ_EGFX_CONN_CLOSED ? "WMRZ_EGFX_CONN_CLOSED" : \
      (status) == WRMZ_EGFX_DELETE ? "WMRZ_EGFX_DELETE" : \
      (status) == WMRZ_SERVER_MONITOR_RESIZE ? "WMRZ_SERVER_MONITOR_RESIZE" : \
-     (status) == WMRZ_SERVER_VERSION_MESSAGE ? "WMRZ_SERVER_VERSION_MESSAGE" : \
+     (status) == WMRZ_SERVER_VERSION_MESSAGE_START ? \
+     "WMRZ_SERVER_VERSION_MESSAGE_START" : \
+     (status) == WMRZ_SERVER_MONITOR_MESSAGE_PROCESSING ? \
+     "WMRZ_SERVER_MONITOR_MESSAGE_PROCESSING" : \
+     (status) == WMRZ_SERVER_MONITOR_MESSAGE_PROCESSED ? \
+     "WMRZ_SERVER_MONITOR_MESSAGE_PROCESSED" : \
      (status) == WMRZ_XRDP_CORE_RESIZE ? "WMRZ_XRDP_CORE_RESIZE" : \
      (status) == WMRZ_EGFX_INITIALIZE ? "WMRZ_EGFX_INITIALIZE" : \
      (status) == WMRZ_EGFX_INITALIZING ? "WMRZ_EGFX_INITALIZING" : \
@@ -392,6 +400,9 @@ struct xrdp_mm
     int xr2cr_cid_map[256];
     int dynamic_monitor_chanid;
     struct xrdp_egfx *egfx;
+    int egfx_up;
+    int egfx_flags;
+    int gfx_delay_autologin;
 
     /* Resize on-the-fly control */
     struct display_control_monitor_layout_data *resize_data;
@@ -519,6 +530,9 @@ struct xrdp_wm
 
     /* configuration derived from xrdp.ini */
     struct xrdp_config *xrdp_config;
+
+    struct xrdp_region *screen_dirty_region;
+    int last_screen_draw_time;
 };
 
 /* rdp process */

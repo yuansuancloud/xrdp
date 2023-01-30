@@ -469,6 +469,12 @@ xrdp_mm_check_wait_objs(struct xrdp_mm *self);
 int
 xrdp_mm_frame_ack(struct xrdp_mm *self, int frame_id);
 int
+xrdp_mm_egfx_send_planar_bitmap(struct xrdp_mm *self,
+                                struct xrdp_bitmap *bitmap,
+                                struct xrdp_rect *rect);
+int
+xrdp_mm_can_resize(struct xrdp_mm *self);
+int
 server_begin_update(struct xrdp_mod *mod);
 int
 server_end_update(struct xrdp_mod *mod);
