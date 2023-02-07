@@ -26,8 +26,8 @@
 #define CHANSRV_PORT_OUT_BASE_STR  "xrdp_chansrv_audio_out_socket_%d"
 #define CHANSRV_PORT_IN_BASE_STR   "xrdp_chansrv_audio_in_socket_%d"
 #define CHANSRV_API_BASE_STR       "xrdpapi_%d"
-#define XRDP_X11RDP_BASE_STR       "xrdp_display_%d"
-#define XRDP_DISCONNECT_BASE_STR   "xrdp_disconnect_display_%d"
+#define XRDP_X11RDP_BASE_STR       "xrdp_disp_%d"
+#define XRDP_DISCONNECT_BASE_STR   "xrdp_disconnect_disp_%d"
 #define SCP_LISTEN_PORT_BASE_STR   "sesman.socket"
 
 /* fullpath of sockets */
