@@ -1605,7 +1605,7 @@ lib_mod_process_message(struct mod *mod, struct stream *s)
                     in_uint16_le(s, width);
                     in_uint16_le(s, height);
                     LOG(LOG_LEVEL_INFO, "Received memory_allocation_complete"
-                        "command. width: %d, height: %d",
+                        " command. width: %d, height: %d",
                         width, height);
                     rv = mod->server_reset(mod, width, height, 0);
                     break;
