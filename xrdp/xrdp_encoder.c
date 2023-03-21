@@ -585,6 +585,8 @@ static int n_save_data(const char *data, int data_size, int width, int height)
 
 #if defined(XRDP_X264)
 
+#define AVC444 1
+
 /*****************************************************************************/
 /* called from encoder thread */
 static int
@@ -596,6 +598,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     int cx;
     int cy;
     int out_data_bytes;
+    int out_data_bytes1;
     int rcount;
     short *rrects;
     int error;
@@ -607,6 +610,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     struct stream ls;
     struct stream *s;
     int comp_bytes_pre;
+    int comp_bytes_pre1;
     int enc_done_flags;
     struct enc_rect rect;
     int scr_width;
@@ -644,8 +648,16 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     ls.data = out_data + 256;
     ls.p = ls.data;
 
+    out_data_bytes1 = 0;
+    comp_bytes_pre1 = 0;
+
     if (self->gfx)
     {
+#if AVC444
+        /* size of avc420EncodedBitmapstraem1 */
+        s_push_layer(s, mcs_hdr, 4);
+#else
+#endif
         /* RFX_AVC420_METABLOCK */
         out_uint32_le(s, rcount); /* numRegionRects */
         for (index = 0; index < rcount; index++)
@@ -734,10 +746,59 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
         g_free(out_data);
         return 0;
     }
-    s->end = s->p + out_data_bytes;
+    s->p += out_data_bytes;
+
+#if AVC444
+    /* chroma 444 */
+    /* RFX_AVC420_METABLOCK */
+    out_uint32_le(s, rcount); /* numRegionRects */
+    for (index = 0; index < rcount; index++)
+    {
+        x = rrects[index * 4 + 0];
+        y = rrects[index * 4 + 1];
+        cx = rrects[index * 4 + 2];
+        cy = rrects[index * 4 + 3];
+        /* RDPGFX_RECT16 */
+        rect.x1 = MAX(0, x - 1);
+        rect.y1 = MAX(0, y - 1);
+        rect.x2 = MIN(x + cx + 1, scr_width);
+        rect.y2 = MIN(y + cy + 1, scr_height);
+        out_uint16_le(s, rect.x1);
+        out_uint16_le(s, rect.y1);
+        out_uint16_le(s, rect.x2);
+        out_uint16_le(s, rect.y2);
+    }
+    for (index = 0; index < rcount; index++)
+    {
+        out_uint8(s, 23); /* qp */
+        out_uint8(s, 100); /* quality level 0..100 */
+    }
+    comp_bytes_pre1 = 4 + rcount * 8 + rcount * 2;
+    out_data_bytes1 = 16 * 1024 * 1024;
+    error = xrdp_encoder_x264_encode(self->codec_handle, 0,
+                                     enc->width, enc->height, 0,
+                                     enc->data,
+                                     s->p, &out_data_bytes1);
+    if (error != 0)
+    {
+        LOG_DEVEL(LOG_LEVEL_TRACE,
+                  "process_enc_h264: xrdp_encoder_x264_encode failed rv %d",
+                  error);
+        g_free(out_data);
+        return 0;
+    }
+    s->p += out_data_bytes1;
+    s_push_layer(s, sec_hdr, 0);
+    s_pop_layer(s, mcs_hdr);
+    out_uint32_le(s, out_data_bytes);
+    s_pop_layer(s, sec_hdr);
+#endif
+
+    s->end = s->p;
 
     if (s->iso_hdr != NULL)
     {
+        /* not used in gfx */
         s_pop_layer(s, iso_hdr);
         out_uint32_le(s, out_data_bytes);
     }
@@ -751,7 +812,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     {
         return 0;
     }
-    enc_done->comp_bytes = comp_bytes_pre + out_data_bytes;
+    enc_done->comp_bytes = comp_bytes_pre + out_data_bytes + comp_bytes_pre1 + out_data_bytes1;
     enc_done->pad_bytes = 256;
     enc_done->comp_pad_data = out_data;
     enc_done->enc = enc;
