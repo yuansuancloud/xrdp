@@ -790,7 +790,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     s->p += out_data_bytes1;
     s_push_layer(s, sec_hdr, 0);
     s_pop_layer(s, mcs_hdr);
-    out_uint32_le(s, out_data_bytes);
+    out_uint32_le(s, comp_bytes_pre + out_data_bytes);
     s_pop_layer(s, sec_hdr);
 #endif
 
@@ -812,7 +812,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     {
         return 0;
     }
-    enc_done->comp_bytes = comp_bytes_pre + out_data_bytes + comp_bytes_pre1 + out_data_bytes1;
+    enc_done->comp_bytes = 4 + comp_bytes_pre + out_data_bytes + comp_bytes_pre1 + out_data_bytes1;
     enc_done->pad_bytes = 256;
     enc_done->comp_pad_data = out_data;
     enc_done->enc = enc;
@@ -820,6 +820,10 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     enc_done->cx = scr_width;
     enc_done->cy = scr_height;
     enc_done->flags = enc_done_flags;
+
+    g_writeln("comp_bytes_pre %d out_data_bytes %d comp_bytes_pre1 %d out_data_bytes1 %d",
+              comp_bytes_pre, out_data_bytes, comp_bytes_pre1, out_data_bytes1);
+    g_hexdump(enc_done->comp_pad_data + enc_done->pad_bytes, enc_done->comp_bytes);
 
     /* done with msg */
     /* inform main thread done */
