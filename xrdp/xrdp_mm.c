@@ -1214,7 +1214,7 @@ xrdp_mm_egfx_caps_advertise(void *user, int caps_count,
                                            versions[best_index],
                                            flagss[best_index]);
         LOG(LOG_LEVEL_INFO, "xrdp_mm_egfx_caps_advertise: xrdp_egfx_send_capsconfirm "
-            "error %d", error);
+            "error %d best_index %d", error, best_index);
         error = xrdp_egfx_send_reset_graphics(self->egfx,
                                               screen->width, screen->height,
                                               self->wm->client_info->display_sizes.monitorCount,
@@ -3279,6 +3279,8 @@ xrdp_mm_check_chan(struct xrdp_mm *self)
     return 0;
 }
 
+#define AVC444 0
+
 /*****************************************************************************/
 static int
 xrdp_mm_process_enc_done(struct xrdp_mm *self)
@@ -3324,7 +3326,11 @@ xrdp_mm_process_enc_done(struct xrdp_mm *self)
                 rect.x2 = x + cx;
                 rect.y2 = y + cy;
                 xrdp_egfx_send_wire_to_surface1(self->egfx, self->egfx->surface_id,
+#if AVC444
+                                                XR_RDPGFX_CODECID_AVC444,
+#else
                                                 XR_RDPGFX_CODECID_AVC420,
+#endif
                                                 XR_PIXEL_FORMAT_XRGB_8888,
                                                 &rect,
                                                 enc_done->comp_pad_data + enc_done->pad_bytes,
