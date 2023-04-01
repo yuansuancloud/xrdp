@@ -3327,7 +3327,7 @@ xrdp_mm_process_enc_done(struct xrdp_mm *self)
                 rect.y2 = y + cy;
                 xrdp_egfx_send_wire_to_surface1(self->egfx, self->egfx->surface_id,
 #if AVC444
-                                                XR_RDPGFX_CODECID_AVC444,
+                                                XR_RDPGFX_CODECID_AVC444V2,
 #else
                                                 XR_RDPGFX_CODECID_AVC420,
 #endif

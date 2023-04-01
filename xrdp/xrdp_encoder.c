@@ -106,9 +106,9 @@ xrdp_encoder_create(struct xrdp_mm *mm)
         client_info->capture_code = 3;
         client_info->capture_format =
             /* XRDP_yuv444_709fr */
-            //(32 << 24) | (67 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
+            (32 << 24) | (67 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
             /* XRDP_nv12_709fr */
-            (12 << 24) | (66 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
+            //(12 << 24) | (66 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
         self->gfx = 1;
 #if defined(XRDP_X264)
@@ -170,10 +170,10 @@ xrdp_encoder_create(struct xrdp_mm *mm)
         self->in_codec_mode = 1;
         client_info->capture_code = 3;
         client_info->capture_format =
+            /* XRDP_yuv444_709fr */
+            (32 << 24) | (67 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
             /* XRDP_nv12 */
-            (12 << 24) | (64 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
-        /* XRDP_yuv444_709fr */
-        //(32 << 24) | (67 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
+            //(12 << 24) | (64 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0;
         self->process_enc = process_enc_h264;
 #if defined(XRDP_X264)
         self->codec_handle = xrdp_encoder_x264_create();
@@ -635,7 +635,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
         rrects = enc->crects;
     }
 
-    out_data_bytes = 16 * 1024 * 1024;
+    out_data_bytes = 128 * 1024 * 1024;
     index = 256 + 16 + 2 + enc->num_drects * 8;
     out_data = g_new(char, out_data_bytes + index);
     if (out_data == NULL)
@@ -654,7 +654,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     if (self->gfx)
     {
 #if AVC444
-        /* size of avc420EncodedBitmapstraem1 */
+        /* size of avc420EncodedBitmapstream1 */
         s_push_layer(s, mcs_hdr, 4);
 #else
 #endif
@@ -774,11 +774,14 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
         out_uint8(s, 100); /* quality level 0..100 */
     }
     comp_bytes_pre1 = 4 + rcount * 8 + rcount * 2;
-    out_data_bytes1 = 16 * 1024 * 1024;
+    out_data_bytes1 = 128 * 1024 * 1024;
     error = xrdp_encoder_x264_encode(self->codec_handle, 0,
                                      enc->width, enc->height, 0,
-                                     enc->data,
+                                     //enc->data,
+                                     //enc->data + (enc->width * 4) + (enc->height * enc->width),
+                                     enc->data + (enc->height * enc->width),
                                      s->p, &out_data_bytes1);
+
     if (error != 0)
     {
         LOG_DEVEL(LOG_LEVEL_TRACE,
@@ -790,6 +793,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     s->p += out_data_bytes1;
     s_push_layer(s, sec_hdr, 0);
     s_pop_layer(s, mcs_hdr);
+    // TODO: Specify LC code here
     out_uint32_le(s, comp_bytes_pre + out_data_bytes);
     s_pop_layer(s, sec_hdr);
 #endif
