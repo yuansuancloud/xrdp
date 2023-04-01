@@ -778,8 +778,8 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     error = xrdp_encoder_x264_encode(self->codec_handle, 0,
                                      enc->width, enc->height, 0,
                                      //enc->data,
-                                     //enc->data + (enc->width * 4) + (enc->height * enc->width),
-                                     enc->data + (enc->height * enc->width),
+                                     enc->data + (enc->width * 4) + (enc->height * enc->width),
+                                     //enc->data + (enc->height * enc->width),
                                      s->p, &out_data_bytes1);
 
     if (error != 0)
