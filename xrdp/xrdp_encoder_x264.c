@@ -133,7 +133,7 @@ xrdp_encoder_x264_encode(void *handle, int session,
             //xe->x264_params.rc.i_rc_method = X264_RC_CQP;
             //xe->x264_params.rc.i_qp_constant = 23;
             //x264_param_apply_profile(&(xe->x264_params), "high");
-            x264_param_apply_profile(&(xe->x264_params), "main");
+            x264_param_apply_profile(&(xe->x264_params), "high");
             //x264_param_apply_profile(&(xe->x264_params), "baseline");
             xe->x264_enc_han = x264_encoder_open(&(xe->x264_params));
             if (xe->x264_enc_han == 0)
