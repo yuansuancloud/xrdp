@@ -96,13 +96,13 @@ xrdp_encoder_x264_encode(void *handle, int session,
 {
     struct x264_global *xg;
     struct x264_encoder *xe;
-    const char *src8;
-    char *dst8;
-    int index;
+    //const char *src8;
+    //char *dst8;
+    //int index;
     x264_nal_t *nals;
     int num_nals;
     int frame_size;
-    int frame_area;
+    //int frame_area;
 
     x264_picture_t pic_in;
     x264_picture_t pic_out;
@@ -133,8 +133,7 @@ xrdp_encoder_x264_encode(void *handle, int session,
             //xe->x264_params.rc.i_rc_method = X264_RC_CQP;
             //xe->x264_params.rc.i_qp_constant = 23;
             //x264_param_apply_profile(&(xe->x264_params), "high");
-            x264_param_apply_profile(&(xe->x264_params), "high");
-            //x264_param_apply_profile(&(xe->x264_params), "baseline");
+            x264_param_apply_profile(&(xe->x264_params), "baseline");
             xe->x264_enc_han = x264_encoder_open(&(xe->x264_params));
             if (xe->x264_enc_han == 0)
             {
@@ -154,35 +153,45 @@ xrdp_encoder_x264_encode(void *handle, int session,
 
     if ((data != 0) && (xe->x264_enc_han != 0))
     {
-        src8 = data;
-        dst8 = xe->yuvdata;
-        for (index = 0; index < height; index++)
-        {
-            g_memcpy(dst8, src8, width);
-            src8 += width;
-            dst8 += xe->x264_params.i_width;
-        }
+        // src8 = data;
+        // dst8 = xe->yuvdata;
+        // for (index = 0; index < height; index++)
+        // {
+        //     g_memcpy(dst8, src8, width);
+        //     src8 += width;
+        //     dst8 += xe->x264_params.i_width;
+        // }
 
-        src8 = data;
-        src8 += width * height;
-        dst8 = xe->yuvdata;
+        // src8 = data;
+        // src8 += width * height;
+        // dst8 = xe->yuvdata;
 
-        frame_area = xe->x264_params.i_width * xe->x264_params.i_height - 1;
-        dst8 += frame_area;
-        for (index = 0; index < height; index += 2)
-        {
-            g_memcpy(dst8, src8, width);
-            src8 += width;
-            dst8 += xe->x264_params.i_width;
-        }
+        // frame_area = xe->x264_params.i_width * xe->x264_params.i_height - 1;
+        // dst8 += frame_area;
+        // for (index = 0; index < height / 2; index++)
+        // {
+        //     g_memcpy(dst8, src8, width / 2);
+        //     src8 += width / 2;
+        //     dst8 += xe->x264_params.i_width / 2;
+        // }
 
-        g_memset(&pic_in, 0, sizeof(pic_in));
-        pic_in.img.i_csp = X264_CSP_NV12;
-        pic_in.img.i_plane = 2;
-        pic_in.img.plane[0] = (unsigned char *) (xe->yuvdata);
-        pic_in.img.plane[1] = (unsigned char *) (xe->yuvdata + frame_area);
-        pic_in.img.i_stride[0] = width;
-        pic_in.img.i_stride[1] = xe->x264_params.i_width;
+        // g_memset(&pic_in, 0, sizeof(pic_in));
+        // pic_in.img.i_csp = X264_CSP_I420;
+        // pic_in.img.i_plane = 3;
+        // pic_in.img.plane[0] = (unsigned char *) (xe->yuvdata);
+        // pic_in.img.plane[1] = (unsigned char *) (xe->yuvdata + frame_area);
+        // pic_in.img.plane[2] = (unsigned char *) (xe->yuvdata + frame_area + frame_area / 4);
+        // pic_in.img.i_stride[0] = xe->x264_params.i_width;
+        // pic_in.img.i_stride[1] = xe->x264_params.i_width / 2;
+        // pic_in.img.i_stride[2] = xe->x264_params.i_width / 2;
+
+        x264_picture_alloc(&pic_in, X264_CSP_I420, width, height);
+
+        // Copy input image to x264 picture structure
+        memcpy(pic_in.img.plane[0], data, width * height);
+        memcpy(pic_in.img.plane[1], data + width * height, width * height / 4);
+        memcpy(pic_in.img.plane[2], data + width * height * 5 / 4, width * height / 4);
+
         num_nals = 0;
         frame_size = x264_encoder_encode(xe->x264_enc_han, &nals, &num_nals,
                                          &pic_in, &pic_out);
