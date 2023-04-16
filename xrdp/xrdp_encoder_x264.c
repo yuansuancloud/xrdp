@@ -130,10 +130,10 @@ xrdp_encoder_x264_encode(void *handle, int session,
             xe->x264_params.i_fps_den = 1;
             //xe->x264_params.b_cabac = 1;
             //xe->x264_params.i_bframe = 0;
-            //xe->x264_params.rc.i_rc_method = X264_RC_CQP;
-            //xe->x264_params.rc.i_qp_constant = 23;
-            //x264_param_apply_profile(&(xe->x264_params), "high");
-            x264_param_apply_profile(&(xe->x264_params), "baseline");
+            xe->x264_params.rc.i_rc_method = X264_RC_CQP;
+            xe->x264_params.rc.i_qp_constant = 23;
+            x264_param_apply_profile(&(xe->x264_params), "high");
+            //x264_param_apply_profile(&(xe->x264_params), "baseline");
             xe->x264_enc_han = x264_encoder_open(&(xe->x264_params));
             if (xe->x264_enc_han == 0)
             {
@@ -187,15 +187,17 @@ xrdp_encoder_x264_encode(void *handle, int session,
 
         x264_picture_alloc(&pic_in, X264_CSP_I420, width, height);
 
+        int full_size = width * height;
+
         // Copy input image to x264 picture structure
-        memcpy(pic_in.img.plane[0], data, width * height);
-        memcpy(pic_in.img.plane[1], data + width * height, width * height / 4);
-        memcpy(pic_in.img.plane[2], data + width * height * 5 / 4, width * height / 4);
+        memcpy(pic_in.img.plane[0], data, full_size);
+        memcpy(pic_in.img.plane[1], data + full_size, full_size / 4);
+        memcpy(pic_in.img.plane[2], data + full_size * 5 / 4, full_size / 4);
 
         num_nals = 0;
         frame_size = x264_encoder_encode(xe->x264_enc_han, &nals, &num_nals,
                                          &pic_in, &pic_out);
-        LOG(LOG_LEVEL_TRACE, "i_type %d", pic_out.i_type);
+        //LOG(LOG_LEVEL_TRACE, "i_type %d", pic_out.i_type);
         if (frame_size < 1)
         {
             return 3;
@@ -206,6 +208,7 @@ xrdp_encoder_x264_encode(void *handle, int session,
         }
         g_memcpy(cdata, nals[0].p_payload, frame_size);
         *cdata_bytes = frame_size;
+        x264_picture_clean(&pic_in);
     }
     return 0;
 }

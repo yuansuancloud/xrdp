@@ -598,7 +598,9 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     int cx;
     int cy;
     int out_data_bytes;
+#if AVC444
     int out_data_bytes1;
+#endif
     int rcount;
     short *rrects;
     int error;
@@ -610,7 +612,9 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     struct stream ls;
     struct stream *s;
     int comp_bytes_pre;
+#if AVC444
     int comp_bytes_pre1;
+#endif
     int enc_done_flags;
     struct enc_rect rect;
     int scr_width;
@@ -648,15 +652,16 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     ls.data = out_data + 256;
     ls.p = ls.data;
 
+#if AVC444
     out_data_bytes1 = 0;
     comp_bytes_pre1 = 0;
+#endif
 
     if (self->gfx)
     {
 #if AVC444
         /* size of avc420EncodedBitmapstream1 */
         s_push_layer(s, mcs_hdr, 4);
-#else
 #endif
         /* RFX_AVC420_METABLOCK */
         out_uint32_le(s, rcount); /* numRegionRects */
@@ -746,9 +751,10 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
         g_free(out_data);
         return 0;
     }
-    s->p += out_data_bytes;
 
 #if AVC444
+    s->p += out_data_bytes;
+
     /* chroma 444 */
     /* RFX_AVC420_METABLOCK */
     out_uint32_le(s, rcount); /* numRegionRects */
@@ -794,9 +800,11 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     // TODO: Specify LC code here
     out_uint32_le(s, comp_bytes_pre + out_data_bytes);
     s_pop_layer(s, sec_hdr);
-#endif
 
     s->end = s->p;
+#else
+    s->end = s->p + out_data_bytes;
+#endif
 
     if (s->iso_hdr != NULL)
     {
@@ -814,7 +822,14 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     {
         return 0;
     }
-    enc_done->comp_bytes = 4 + comp_bytes_pre + out_data_bytes + comp_bytes_pre1 + out_data_bytes1;
+#if AVC444
+    enc_done->comp_bytes = 4 + comp_bytes_pre
+        + out_data_bytes
+        + comp_bytes_pre1
+        + out_data_bytes1;
+#else
+    enc_done->comp_bytes = comp_bytes_pre + out_data_bytes;
+#endif
     enc_done->pad_bytes = 256;
     enc_done->comp_pad_data = out_data;
     enc_done->enc = enc;
@@ -823,9 +838,11 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     enc_done->cy = scr_height;
     enc_done->flags = enc_done_flags;
 
+#if 0
     g_writeln("comp_bytes_pre %d out_data_bytes %d comp_bytes_pre1 %d out_data_bytes1 %d",
               comp_bytes_pre, out_data_bytes, comp_bytes_pre1, out_data_bytes1);
     g_hexdump(enc_done->comp_pad_data + enc_done->pad_bytes, enc_done->comp_bytes);
+#endif
 
     /* done with msg */
     /* inform main thread done */
