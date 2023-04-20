@@ -188,11 +188,14 @@ xrdp_encoder_x264_encode(void *handle, int session,
         x264_picture_alloc(&pic_in, X264_CSP_I420, width, height);
 
         int full_size = width * height;
+        int quarter_size = full_size / 4;
 
         // Copy input image to x264 picture structure
         memcpy(pic_in.img.plane[0], data, full_size);
-        memcpy(pic_in.img.plane[1], data + full_size, full_size / 4);
-        memcpy(pic_in.img.plane[2], data + full_size * 5 / 4, full_size / 4);
+        memcpy(pic_in.img.plane[1], data + full_size, quarter_size);
+        memcpy(pic_in.img.plane[2], data + full_size * 5 / 4, quarter_size);
+
+        pic_in.i_type = X264_TYPE_IDR;
 
         num_nals = 0;
         frame_size = x264_encoder_encode(xe->x264_enc_han, &nals, &num_nals,

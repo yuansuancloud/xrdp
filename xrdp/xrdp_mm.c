@@ -1180,16 +1180,12 @@ xrdp_mm_egfx_caps_advertise(void *user, int caps_count,
                 best_pro_index = index;
                 break;
             case XR_RDPGFX_CAPVERSION_104:
+            case XR_RDPGFX_CAPVERSION_105:
+            case XR_RDPGFX_CAPVERSION_106:
                 if (!(flags & XR_RDPGFX_CAPS_FLAG_AVC_DISABLED))
                 {
                     best_h264_index = index;
                 }
-                best_pro_index = index;
-                break;
-            case XR_RDPGFX_CAPVERSION_105:
-                best_pro_index = index;
-                break;
-            case XR_RDPGFX_CAPVERSION_106:
                 best_pro_index = index;
                 break;
         }

@@ -672,10 +672,10 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
             cx = rrects[index * 4 + 2];
             cy = rrects[index * 4 + 3];
             /* RDPGFX_RECT16 */
-            rect.x1 = MAX(0, x - 1);
-            rect.y1 = MAX(0, y - 1);
-            rect.x2 = MIN(x + cx + 1, scr_width);
-            rect.y2 = MIN(y + cy + 1, scr_height);
+            rect.x1 = MAX(0, x);
+            rect.y1 = MAX(0, y);
+            rect.x2 = MIN(x + cx, scr_width);
+            rect.y2 = MIN(y + cy, scr_height);
             out_uint16_le(s, rect.x1);
             out_uint16_le(s, rect.y1);
             out_uint16_le(s, rect.x2);
@@ -765,10 +765,10 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
         cx = rrects[index * 4 + 2];
         cy = rrects[index * 4 + 3];
         /* RDPGFX_RECT16 */
-        rect.x1 = MAX(0, x - 1);
-        rect.y1 = MAX(0, y - 1);
-        rect.x2 = MIN(x + cx + 1, scr_width);
-        rect.y2 = MIN(y + cy + 1, scr_height);
+        rect.x1 = MAX(0, x);
+        rect.y1 = MAX(0, y);
+        rect.x2 = MIN(x + cx, scr_width);
+        rect.y2 = MIN(y + cy, scr_height);
         out_uint16_le(s, rect.x1);
         out_uint16_le(s, rect.y1);
         out_uint16_le(s, rect.x2);
@@ -783,7 +783,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     out_data_bytes1 = 128 * 1024 * 1024;
     error = xrdp_encoder_x264_encode(self->codec_handle, 0,
                                      enc->width, enc->height, 0,
-                                     enc->data + (enc->height * enc->width) + (enc->height * enc->width) / 2,
+                                     enc->data + (enc->height * enc->width) * 3 / 2,
                                      s->p, &out_data_bytes1);
 
     if (error != 0)
@@ -798,7 +798,10 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     s_push_layer(s, sec_hdr, 0);
     s_pop_layer(s, mcs_hdr);
     // TODO: Specify LC code here
-    out_uint32_le(s, comp_bytes_pre + out_data_bytes);
+    uint8_t LC = 0b01;
+    uint32_t bitstream1 =
+        ((comp_bytes_pre + out_data_bytes) & 0x3FFFFFFFUL) | ((LC & 0x03UL) << 30UL);
+    out_uint32_le(s, bitstream1);
     s_pop_layer(s, sec_hdr);
 
     s->end = s->p;
