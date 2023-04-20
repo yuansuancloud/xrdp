@@ -798,7 +798,7 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     s_push_layer(s, sec_hdr, 0);
     s_pop_layer(s, mcs_hdr);
     // TODO: Specify LC code here
-    uint8_t LC = 0b01;
+    uint8_t LC = 0b00;
     uint32_t bitstream1 =
         ((comp_bytes_pre + out_data_bytes) & 0x3FFFFFFFUL) | ((LC & 0x03UL) << 30UL);
     out_uint32_le(s, bitstream1);
