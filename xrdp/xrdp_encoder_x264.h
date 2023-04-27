@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Yami Encoder
+ * x264 Encoder
  */
 
 #ifndef _XRDP_ENCODER_X264_H
