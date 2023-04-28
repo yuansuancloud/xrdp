@@ -799,11 +799,17 @@ process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     }
     comp_bytes_pre1 = 4 + rcount * 8 + rcount * 2;
     out_data_bytes1 = 128 * 1024 * 1024;
+#if defined(XRDP_X264)
     error = xrdp_encoder_x264_encode(self->codec_handle, 0,
                                      enc->width, enc->height, 1,
                                      enc->data + (enc->height * enc->width) * 3 / 2,
                                      s->p, &out_data_bytes1);
-
+#elif defined(XRDP_OPENH264)
+    error = xrdp_encoder_openh264_encode(self->codec_handle, 0,
+                                            enc->width, enc->height, 0,
+                                            enc->data,
+                                            s->p, &out_data_bytes);
+#endif
     if (error != 0)
     {
         LOG_DEVEL(LOG_LEVEL_TRACE,
