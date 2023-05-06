@@ -93,7 +93,7 @@ main(int argc, char **argv)
         else
         {
             printf("Unable to find any outputs\n");
-            exit(1);
+            exit(0);
         }
     }
 
